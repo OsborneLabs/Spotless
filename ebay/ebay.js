@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.0
+// @version      1.1
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -24,6 +24,9 @@
 // @match        https://www.ebay.nl/sch/*
 // @match        https://www.ebay.ph/sch/*
 // @match        https://www.ebay.pl/sch/*
+// @run-at       document-start
+// @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
+// @updateURL    https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // @grant        none
 // ==/UserScript==
 
@@ -116,7 +119,7 @@
 
             @media (max-width: 768px) {
                 #panelWrapper {
-                    bottom: 0;
+                    bottom: 5px;
                     left: 50%;
                     transform: translateX(-50%);
                     width: 90% !important;
@@ -582,20 +585,18 @@
         );
     }
 
-    function detectSponsoredListingByHeight() {
-        const listings = getListingElements();
-        const sponsoredListings = [];
+    function detectSponsoredListingByWidth() {
+        const items = getListingElements();
 
-        listings.forEach(item => {
-            const sponsoredDiv = [...item.querySelectorAll('div[role="text"]')].find(div => {
-                return div.textContent.trim().length > 0;
-            });
-            if (sponsoredDiv) {
-                const height = sponsoredDiv.getBoundingClientRect().height;
-                if (height > 10) {
-                    sponsoredListings.push(item);
+        const sponsoredListings = items.filter(item => {
+            const sepSpan = item.querySelector('span.s-item__sep');
+            if (sepSpan) {
+                const width = sepSpan.offsetWidth;
+                if (width > 10) {
+                    return true;
                 }
             }
+            return false;
         });
         return sponsoredListings;
     }
@@ -767,7 +768,7 @@
             const unprocessedListings = listings.filter(el => !el.hasAttribute("data-sponsored-processed"));
             let count = 0;
 
-            const heightMethod = detectSponsoredListingByHeight();
+            const heightMethod = detectSponsoredListingByWidth();
             if (heightMethod.length > 0) {
                 for (const listing of heightMethod) {
                     const li = listing.closest("li");
