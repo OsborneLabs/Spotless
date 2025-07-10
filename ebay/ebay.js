@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.1
+// @version      1.1.1
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -598,6 +598,10 @@
             }
             return false;
         });
+
+        if (sponsoredListings.length > 25) {
+            return [];
+        }
         return sponsoredListings;
     }
 
@@ -768,9 +772,9 @@
             const unprocessedListings = listings.filter(el => !el.hasAttribute("data-sponsored-processed"));
             let count = 0;
 
-            const heightMethod = detectSponsoredListingByWidth();
-            if (heightMethod.length > 0) {
-                for (const listing of heightMethod) {
+            const widthMethod = detectSponsoredListingByWidth();
+            if (widthMethod.length > 0) {
+                for (const listing of widthMethod) {
                     const li = listing.closest("li");
                     if (li && !li.hasAttribute("data-sponsored-processed")) {
                         designateSponsoredContent(li);
