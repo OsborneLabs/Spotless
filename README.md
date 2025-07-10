@@ -1,7 +1,9 @@
-<p align=center><img src="https://cdn-icons-png.flaticon.com/512/10464/10464776.png" width="75" height="75"></p><h1 align=center>Spotless</h1>
+<p align=center><img src="https://cdn-icons-png.flaticon.com/512/10464/10464776.png" width="75" height="75"></p>
+<h1 align=center>Spotless</h1>
 
 <div align="center">
 
-![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
+  ![Version](https://img.shields.io/badge/Version-v1.1.1-blue?style=flat-square) 
+  ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 
 </div>
