@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.1.1
+// @version      1.2
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -22,12 +22,11 @@
 // @match        https://www.ebay.ie/sch/*
 // @match        https://www.ebay.it/sch/*
 // @match        https://www.ebay.nl/sch/*
-// @match        https://www.ebay.ph/sch/*
 // @match        https://www.ebay.pl/sch/*
 // @run-at       document-start
-// @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
-// @updateURL    https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // @grant        none
+// @downloadURL https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
+// @updateURL https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // ==/UserScript==
 
 /* jshint esversion: 11 */
@@ -100,7 +99,7 @@
                 --color-switch-knob: white;
                 --color-switch-off: #ccc;
                 --color-switch-on: #2AA866;
-                --color-switch-on-shadow: 0 0 4px rgba(39, 174, 96, 0.6);
+                --color-switch-on-shadow: 0 0 4px rgba(39, 174, 96, 0.3);
 
                 --thickness-highlight-border: 2px;
             }
@@ -585,6 +584,81 @@
         );
     }
 
+    function detectSponsoredListingByBase64(batchSize = 5) {
+        return new Promise((resolve) => {
+            const listings = getListingElements();
+            const sponsoredElements = [];
+            let index = 0;
+
+            function processBatch() {
+                const end = Math.min(index + batchSize, listings.length);
+                const batch = listings.slice(index, end);
+                let processedInBatch = 0;
+
+                if (batch.length === 0) {
+                    resolve(sponsoredElements);
+                    return;
+                }
+
+                batch.forEach((listing) => {
+                    const svgImage = listing.querySelector(".s-item__sep span[aria-hidden='true']");
+                    if (!svgImage) return done();
+
+                    const backgroundImage = getComputedStyle(svgImage.parentElement).backgroundImage;
+                    const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
+
+                    if (!match || !match[1]) return done();
+
+                    const base64 = match[1];
+                    const svgString = atob(base64);
+                    const img = new Image();
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+
+                    img.src = "data:image/svg+xml;base64," + btoa(svgString);
+
+                    img.onload = () => {
+                        canvas.width = img.naturalWidth || 100;
+                        canvas.height = img.naturalHeight || 100;
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+                        for (let i = 0; i < imageData.length; i += 4) {
+                            const r = imageData[i];
+                            const g = imageData[i + 1];
+                            const b = imageData[i + 2];
+                            const a = imageData[i + 3];
+
+                            if (a > 0 && r === 112 && g === 112 && b === 112) {
+                                sponsoredElements.push(listing);
+                                break;
+                            }
+                        }
+                        done();
+                    };
+
+                    img.onerror = () => {
+                        done();
+                    };
+
+                    function done() {
+                        processedInBatch++;
+                        if (processedInBatch === batch.length) {
+                            index += batchSize;
+                            setTimeout(processBatch, 0);
+                        }
+                    }
+                });
+                if (batch.length === 0) resolve(sponsoredElements);
+            }
+            if (listings.length === 0) {
+                resolve([]);
+            } else {
+                processBatch();
+            }
+        });
+    }
+
     function detectSponsoredListingByWidth() {
         const items = getListingElements();
 
@@ -598,7 +672,6 @@
             }
             return false;
         });
-
         if (sponsoredListings.length > 25) {
             return [];
         }
@@ -717,29 +790,6 @@
         };
     }
 
-    function detectSponsoredListingByBase64(listingElement, sponsoredLabel, base64Map) {
-        const adContainer =
-            listingElement.querySelector("span.s-item__sep > div[role='text']") ||
-            listingElement;
-
-        const computed = getComputedStyle(adContainer);
-        const bgImage = computed.getPropertyValue("background-image").trim();
-
-        for (const variable of sponsoredLabel) {
-            const base64List = Object.entries(base64Map).find(([, vars]) =>
-                vars.includes(variable)
-            );
-
-            if (!base64List) continue;
-            const [base64] = base64List;
-
-            if (bgImage.includes(base64)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     function detectSponsoredBanner() {
         const tld = getEffectiveTLD();
         if (tld !== "co.uk" && tld !== "com.au" && tld !== "de") return [];
@@ -761,148 +811,65 @@
         isProcessing = true;
 
         try {
-            const {
-                sponsoredLabel,
-                base64Map
-            } = await new Promise(resolve => getSponsoredLabelForBase64(resolve));
+            observer.disconnect();
 
             clearDesignateSponsoredContent();
 
             const listings = getListingElements();
             const unprocessedListings = listings.filter(el => !el.hasAttribute("data-sponsored-processed"));
-            let count = 0;
+            const detectedSponsoredElements = new Set();
 
-            const widthMethod = detectSponsoredListingByWidth();
-            if (widthMethod.length > 0) {
-                for (const listing of widthMethod) {
+            const base64Results = await detectSponsoredListingByBase64();
+            base64Results.forEach(el => {
+                const li = el.closest("li");
+                if (li) detectedSponsoredElements.add(li);
+            });
+
+            if (detectedSponsoredElements.size === 0) {
+                const widthMethod = detectSponsoredListingByWidth();
+                widthMethod.forEach(listing => {
                     const li = listing.closest("li");
-                    if (li && !li.hasAttribute("data-sponsored-processed")) {
-                        designateSponsoredContent(li);
-                        count++;
-                    }
-                }
-            } else {
-                const ariaMethod = detectSponsoredListingByAriaID(unprocessedListings);
-                if (ariaMethod.length > 0) {
-                    for (const listing of ariaMethod) {
-                        const li = listing.closest("li");
-                        if (li && !li.hasAttribute("data-sponsored-processed")) {
-                            designateSponsoredContent(li);
-                            count++;
-                        }
-                    }
-                } else {
-                    const invertMethod = detectSponsoredListingByInvertFilter();
-                    if (invertMethod?.elements?.length > 0) {
-                        for (const container of invertMethod.elements) {
-                            const li = container.closest("li");
-                            if (li && !li.hasAttribute("data-sponsored-processed")) {
-                                designateSponsoredContent(li);
-                                count++;
-                            }
-                        }
-                    } else {
-                        for (const el of unprocessedListings) {
-                            if (detectSponsoredListingByBase64(el, sponsoredLabel, base64Map)) {
-                                designateSponsoredContent(el);
-                                count++;
-                            }
-                        }
-                    }
-                }
-            }
-            const banners = await detectSponsoredBanner();
-            for (const banner of banners) {
-                if (!banner.hasAttribute("data-sponsored-processed")) {
-                    designateSponsoredContent(banner);
-                    count++;
-                }
-            }
-            for (const el of highlightedSponsoredContent) {
-                highlightSponsoredContent(el);
-                hideShowSponsoredContent(el, hidingEnabled);
-            }
-            countSponsoredContent(count);
-            initializeObserver();
-            return count;
-        } catch (err) {
-            console.error("Error in processSponsoredContent:", err);
-        } finally {
-            isProcessing = false;
-        }
-    }
-
-    function getSponsoredLabelForBase64(callback) {
-        const base64Map = {};
-        const sponsoredLabel = new Set();
-        const base64Track = new Set();
-        const styles = document.querySelectorAll("style");
-
-        let totalToCheck = 0;
-        const state = {
-            processed: 0
-        };
-
-        const finalize = () => {
-            if (state.processed === totalToCheck) {
-                callback({
-                    sponsoredLabel,
-                    base64Map
+                    if (li) detectedSponsoredElements.add(li);
                 });
             }
-        };
 
-        styles.forEach(style => {
-            const styleContent = style.textContent;
-            const styleRegex = /--([\w-]+)\s*:\s*url\(["']?data:image\/svg\+xml;base64,([^'")]+)['"]?\)/g;
-
-            let match;
-            while ((match = styleRegex.exec(styleContent)) !== null) {
-                const varName = `--${match[1]}`;
-                const base64 = match[2];
-
-                if (base64.length > 425 || base64Track.has(base64)) continue;
-                base64Track.add(base64);
-
-                if (!base64Map[base64]) base64Map[base64] = [];
-                base64Map[base64].push(varName);
-                totalToCheck++;
-
-                const svgString = atob(base64);
-                const img = new Image();
-                const canvas = document.createElement("canvas");
-                const ctx = canvas.getContext("2d");
-                img.src = "data:image/svg+xml;base64," + btoa(svgString);
-
-                img.onload = function() {
-                    canvas.width = img.naturalWidth || 100;
-                    canvas.height = img.naturalHeight || 100;
-                    ctx.drawImage(img, 0, 0);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                    const seenColors = new Set();
-                    for (let i = 0; i < imageData.length; i += 4) {
-                        const a = imageData[i + 3];
-                        if (a === 0) continue;
-                        seenColors.add(`${imageData[i]},${imageData[i + 1]},${imageData[i + 2]}`);
-                        if (seenColors.size > 1) break;
-                    }
-                    if (seenColors.size > 1) {
-                        base64Map[base64].forEach(v => sponsoredLabel.add(v));
-                    }
-                    state.processed++;
-                    finalize();
-                };
-                img.onerror = function() {
-                    state.processed++;
-                    finalize();
-                };
+            if (detectedSponsoredElements.size === 0) {
+                const ariaMethod = detectSponsoredListingByAriaID(unprocessedListings);
+                ariaMethod.forEach(listing => {
+                    const li = listing.closest("li");
+                    if (li) detectedSponsoredElements.add(li);
+                });
             }
-        });
-        if (totalToCheck === 0) {
-            callback({
-                sponsoredLabel,
-                base64Map
+
+            if (detectedSponsoredElements.size === 0) {
+                const invertMethod = detectSponsoredListingByInvertFilter();
+                invertMethod.elements?.forEach(container => {
+                    const li = container.closest("li");
+                    if (li) detectedSponsoredElements.add(li);
+                });
+            }
+
+            const banners = await detectSponsoredBanner();
+            banners.forEach(banner => {
+                detectedSponsoredElements.add(banner);
             });
+
+            requestAnimationFrame(() => {
+                for (const el of detectedSponsoredElements) {
+                    if (!el.hasAttribute("data-sponsored-processed")) {
+                        designateSponsoredContent(el);
+                        highlightSponsoredContent(el);
+                        hideShowSponsoredContent(el, hidingEnabled);
+                    }
+                }
+                countSponsoredContent(detectedSponsoredElements.size);
+                initializeObserver();
+                isProcessing = false;
+            });
+        } catch (err) {
+            console.error("Error in processSponsoredContent:", err);
+            isProcessing = false;
+            initializeObserver();
         }
     }
 
@@ -964,7 +931,6 @@
             "ebay.ie": "ie",
             "ebay.it": "it",
             "ebay.nl": "nl",
-            "ebay.ph": "ph",
             "ebay.pl": "pl",
             "ebay.com": "com",
         };
