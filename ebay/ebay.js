@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.2
+// @version      1.3
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -24,9 +24,9 @@
 // @match        https://www.ebay.nl/sch/*
 // @match        https://www.ebay.pl/sch/*
 // @run-at       document-start
+// @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
+// @updateURL    https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // @grant        none
-// @downloadURL https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
-// @updateURL https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // ==/UserScript==
 
 /* jshint esversion: 11 */
@@ -332,7 +332,7 @@
                 transition: color 0.3s ease;
             }
 
-            #creator-page:hover,  .check-status-page:hover, .refresh-link:hover{
+            #creator-page:hover,  .check-status-page:hover, .retry-link:hover{
                 color: var(--color-font-link-hover);
             }
 
@@ -341,12 +341,12 @@
                 font-size: var(--size-font-body-error);
             }
 
-            .check-status-page, .refresh-link {
+            .check-status-page, .retry-link {
                 text-decoration: underline;
                 color: var(--color-font-text);
             }
 
-            .check-status-page:visited, .refresh-link:visited {
+            .check-status-page:visited, .retry-link:visited {
                 color: var(--color-font-link-visited);
             }
 
@@ -453,7 +453,7 @@
         const creatorPage = document.createElement("a");
         creatorPage.href = "https://github.com/OsborneLabs/Spotless";
         creatorPage.target = "_blank";
-        creatorPage.style.textDecoration = "inherit";
+        creatorPage.style.textDecoration = "none";
         creatorPage.textContent = "Osborne";
         creatorPage.id = "creator-page";
 
@@ -528,15 +528,16 @@
 
         const errorMessage = document.createElement("p");
         errorMessage.textContent = "No sponsored content found. ";
+        errorMessage.appendChild(document.createElement("br"));
 
-        const outboundRefreshPage = document.createElement("a");
-        outboundRefreshPage.textContent = "Refresh";
-        outboundRefreshPage.href = "#";
-        outboundRefreshPage.addEventListener("click", function(event) {
+        const outboundRetryPage = document.createElement("a");
+        outboundRetryPage.textContent = "Retry";
+        outboundRetryPage.href = "#";
+        outboundRetryPage.addEventListener("click", function(event) {
             event.preventDefault();
             location.reload();
         });
-        outboundRefreshPage.classList.add("refresh-link");
+        outboundRetryPage.classList.add("retry-link");
 
         const outboundStatusPage = document.createElement("a");
         outboundStatusPage.textContent = "check status";
@@ -544,7 +545,7 @@
         outboundStatusPage.target = "_blank";
         outboundStatusPage.classList.add("check-status-page");
 
-        errorMessage.appendChild(outboundRefreshPage);
+        errorMessage.appendChild(outboundRetryPage);
         errorMessage.appendChild(document.createTextNode(" or "));
         errorMessage.appendChild(outboundStatusPage);
 
@@ -618,8 +619,8 @@
                     img.src = "data:image/svg+xml;base64," + btoa(svgString);
 
                     img.onload = () => {
-                        canvas.width = img.naturalWidth || 100;
-                        canvas.height = img.naturalHeight || 100;
+                        canvas.width = img.naturalWidth || 25;
+                        canvas.height = img.naturalHeight || 25;
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
@@ -657,25 +658,6 @@
                 processBatch();
             }
         });
-    }
-
-    function detectSponsoredListingByWidth() {
-        const items = getListingElements();
-
-        const sponsoredListings = items.filter(item => {
-            const sepSpan = item.querySelector('span.s-item__sep');
-            if (sepSpan) {
-                const width = sepSpan.offsetWidth;
-                if (width > 10) {
-                    return true;
-                }
-            }
-            return false;
-        });
-        if (sponsoredListings.length > 25) {
-            return [];
-        }
-        return sponsoredListings;
     }
 
     function detectSponsoredListingByAriaID(listings = getListingElements()) {
@@ -746,7 +728,6 @@
                 });
             }
         });
-
         const containers = Array.from(document.querySelectorAll('div[role="text"]')).filter(container => {
             return container.querySelector('div[aria-hidden="true"]');
         });
@@ -802,17 +783,16 @@
                     return !el.className.includes("srp-controls") && el.offsetHeight >= 100;
                 });
                 resolve(banners);
-            }, 500);
+            }, 525);
         });
     }
 
     async function processSponsoredContent() {
-        if (isProcessing) return;
+        if (isProcessing) return 0;
         isProcessing = true;
 
         try {
             observer.disconnect();
-
             clearDesignateSponsoredContent();
 
             const listings = getListingElements();
@@ -826,21 +806,12 @@
             });
 
             if (detectedSponsoredElements.size === 0) {
-                const widthMethod = detectSponsoredListingByWidth();
-                widthMethod.forEach(listing => {
-                    const li = listing.closest("li");
-                    if (li) detectedSponsoredElements.add(li);
-                });
-            }
-
-            if (detectedSponsoredElements.size === 0) {
                 const ariaMethod = detectSponsoredListingByAriaID(unprocessedListings);
                 ariaMethod.forEach(listing => {
                     const li = listing.closest("li");
                     if (li) detectedSponsoredElements.add(li);
                 });
             }
-
             if (detectedSponsoredElements.size === 0) {
                 const invertMethod = detectSponsoredListingByInvertFilter();
                 invertMethod.elements?.forEach(container => {
@@ -862,14 +833,19 @@
                         hideShowSponsoredContent(el, hidingEnabled);
                     }
                 }
-                countSponsoredContent(detectedSponsoredElements.size);
+
+                const count = detectedSponsoredElements.size;
+                countSponsoredContent(count);
+
                 initializeObserver();
                 isProcessing = false;
             });
+            return detectedSponsoredElements.size;
         } catch (err) {
-            console.error("Error in processSponsoredContent:", err);
+            console.error("Error processing sponsored content:", err);
             isProcessing = false;
             initializeObserver();
+            return 0;
         }
     }
 
