@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3
+// @version      1.3.1
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -45,13 +45,13 @@
     let updateScheduled = false;
     let observerInitialized = false;
 
-    const SVG_ICONS = {
+    const APP_ICONS = {
         locked: `
-            <svg class="lock-icon lockSVG" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/>
             </svg>`,
         unlocked: `
-            <svg class="lock-icon lockSVG" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/>
             </svg>`,
         arrow: `
@@ -226,7 +226,7 @@
                 fill: var(--color-svg-fill);
             }
 
-            .lockSVG {
+            .lock-icon-animation {
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -237,7 +237,7 @@
                 transform: rotate(0deg);
             }
 
-            .lockSVG.active {
+            .lock-icon-animation.active {
                 opacity: 1;
                 transform: rotate(360deg);
             }
@@ -332,7 +332,7 @@
                 transition: color 0.3s ease;
             }
 
-            #creator-page:hover,  .check-status-page:hover, .retry-link:hover{
+            #creator-page:hover, .outbound-status-page:hover, .retry-link:hover{
                 color: var(--color-font-link-hover);
             }
 
@@ -341,17 +341,13 @@
                 font-size: var(--size-font-body-error);
             }
 
-            .check-status-page, .retry-link {
+            .outbound-status-page, .retry-link {
                 text-decoration: underline;
                 color: var(--color-font-text);
             }
 
-            .check-status-page:visited, .retry-link:visited {
+            .outbound-status-page:visited, .retry-link:visited {
                 color: var(--color-font-link-visited);
-            }
-
-            .sponsored-hidden {
-                display: none !important;
             }
 
             .sponsored-highlight {
@@ -359,12 +355,16 @@
             background-color: var(--color-highlight-background);
             }
 
+            .sponsored-hidden {
+                display: none !important;
+            }
+
         `;
         document.head.appendChild(style);
     }
 
-    function determineCurrentPage(sponsoredCount, hidingEnabled) {
-        if (hidingEnabled && sponsoredCount === 0) {
+    function determineCurrentPage(sponsoredCount) {
+        if (sponsoredCount === 0) {
             return buildPanelErrorPage();
         }
         return buildPanelHomePage();
@@ -420,6 +420,13 @@
         setPanelMinimized(isPanelMinimized);
 
         const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
+
+        if (!toggleSponsoredContentSwitchInput) {
+            console.warn("Spotless for eBay: Switch toggle not found. Error page present.");
+            updateLockIcons();
+            return;
+        }
+
         toggleSponsoredContentSwitchInput.addEventListener("change", (e) => {
             hidingEnabled = e.target.checked;
             localStorage.setItem(SPONSORED_CONTENT_KEY, hidingEnabled);
@@ -435,12 +442,12 @@
 
         header.innerHTML = `
             <div id="lockIconContainer">
-                ${SVG_ICONS.locked}
-                ${SVG_ICONS.unlocked}
+                ${APP_ICONS.locked}
+                ${APP_ICONS.unlocked}
             </div>
             <h2 class="panel-title" aria-level="1">${APP_TITLE}</h2>
             <button id="minimizePanelButton" aria-label="Expand or minimize the panel">
-                ${SVG_ICONS.arrow}
+                ${APP_ICONS.arrow}
             </button>
         `;
         return header;
@@ -463,7 +470,7 @@
         const donatePage = document.createElement("a");
         donatePage.href = "https://ko-fi.com/osbornelabs";
         donatePage.target = "_blank";
-        donatePage.innerHTML = SVG_ICONS.heart;
+        donatePage.innerHTML = APP_ICONS.heart;
         donatePage.style.display = "inline-flex";
         donatePage.style.alignItems = "center";
         donatePage.style.justifyContent = "center";
@@ -543,7 +550,7 @@
         outboundStatusPage.textContent = "check status";
         outboundStatusPage.href = "https://github.com/OsborneLabs/Spotless";
         outboundStatusPage.target = "_blank";
-        outboundStatusPage.classList.add("check-status-page");
+        outboundStatusPage.classList.add("outbound-status-page");
 
         errorMessage.appendChild(outboundRetryPage);
         errorMessage.appendChild(document.createTextNode(" or "));
@@ -842,7 +849,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error("Error processing sponsored content:", err);
+            console.error("Spotless for eBay: Error processing sponsored content:", err);
             isProcessing = false;
             initializeObserver();
             return 0;
