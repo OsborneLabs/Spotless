@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3.1
+// @version      1.3.2
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -422,7 +422,6 @@
         const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
 
         if (!toggleSponsoredContentSwitchInput) {
-            console.warn("Spotless for eBay: Switch toggle not found. Error page present.");
             updateLockIcons();
             return;
         }
@@ -849,7 +848,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error("Spotless for eBay: Error processing sponsored content:", err);
+            console.error("Error processing sponsored content:", err);
             isProcessing = false;
             initializeObserver();
             return 0;
