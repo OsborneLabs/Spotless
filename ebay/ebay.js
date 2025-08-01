@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3.2
+// @version      1.3.3
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -84,16 +84,16 @@
                 --size-font-body-error: 16px;
                 --size-font-footer: 12px;
 
-                --color-bubble: #e74c3c;
-                --color-divider-border: rgba(255, 255, 255, 0.1);
                 --color-font-text: white;
                 --color-font-link-hover: lightblue;
                 --color-font-link-visited: lightblue;
-                --color-highlight-background: #ffe6e6;
-                --color-highlight-border: red;
                 --color-panel: rgba(34, 50, 70, 0.85);
                 --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
                 --color-row: rgba(20, 30, 45, 0.5);
+                --color-divider-border: rgba(255, 255, 255, 0.1);
+                --color-bubble: #e74c3c;
+                --color-highlight-background: #ffe6e6;
+                --color-highlight-border: red;
                 --color-svg-fill: white;
                 --color-svg-fill-heart-hover: red;
                 --color-switch-knob: white;
@@ -445,7 +445,7 @@
                 ${APP_ICONS.unlocked}
             </div>
             <h2 class="panel-title" aria-level="1">${APP_TITLE}</h2>
-            <button id="minimizePanelButton" aria-label="Expand or minimize the panel">
+            <button id="minimizePanelButton" aria-label="Expands and minimizes the panel">
                 ${APP_ICONS.arrow}
             </button>
         `;
@@ -799,7 +799,7 @@
 
         try {
             observer.disconnect();
-            clearDesignateSponsoredContent();
+            resetDesignateSponsoredContent();
 
             const listings = getListingElements();
             const unprocessedListings = listings.filter(el => !el.hasAttribute("data-sponsored-processed"));
@@ -861,7 +861,7 @@
         highlightedSponsoredContent.push(el);
     }
 
-    function clearDesignateSponsoredContent() {
+    function resetDesignateSponsoredContent() {
         highlightedSponsoredContent.forEach(el => {
             el.classList.remove("sponsored-hidden");
             el.removeAttribute("data-sponsored");
