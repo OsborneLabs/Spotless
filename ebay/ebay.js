@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3.3
+// @version      1.3.4
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -88,7 +88,7 @@
                 --color-font-link-hover: lightblue;
                 --color-font-link-visited: lightblue;
                 --color-panel: rgba(34, 50, 70, 0.85);
-                --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
+                --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 --color-row: rgba(20, 30, 45, 0.5);
                 --color-divider-border: rgba(255, 255, 255, 0.1);
                 --color-bubble: #e74c3c;
@@ -332,7 +332,7 @@
                 transition: color 0.3s ease;
             }
 
-            #creator-page:hover, .outbound-status-page:hover, .retry-link:hover{
+            #creator-page:hover, .outbound-status-page:hover, .retry-page:hover{
                 color: var(--color-font-link-hover);
             }
 
@@ -341,12 +341,12 @@
                 font-size: var(--size-font-body-error);
             }
 
-            .outbound-status-page, .retry-link {
+            .outbound-status-page, .retry-page {
                 text-decoration: underline;
                 color: var(--color-font-text);
             }
 
-            .outbound-status-page:visited, .retry-link:visited {
+            .outbound-status-page:visited, .retry-page:visited {
                 color: var(--color-font-link-visited);
             }
 
@@ -499,7 +499,7 @@
     function buildToggleSponsoredContentRow() {
         const row = buildPanelRow(`
             <span class="switch-label">Hide sponsored content</span>
-            <label class="switch" aria-label="Toggle visibility of sponsored content">
+            <label class="switch" aria-label="Toggles the visibility of sponsored content">
                 <input type="checkbox" id="toggleSponsoredContentSwitch" ${hidingEnabled ? "checked" : ""}>
                 <span class="slider"></span>
             </label>
@@ -543,7 +543,7 @@
             event.preventDefault();
             location.reload();
         });
-        outboundRetryPage.classList.add("retry-link");
+        outboundRetryPage.classList.add("retry-page");
 
         const outboundStatusPage = document.createElement("a");
         outboundStatusPage.textContent = "check status";
@@ -625,8 +625,8 @@
                     img.src = "data:image/svg+xml;base64," + btoa(svgString);
 
                     img.onload = () => {
-                        canvas.width = img.naturalWidth || 25;
-                        canvas.height = img.naturalHeight || 25;
+                        canvas.width = img.naturalWidth || 20;
+                        canvas.height = img.naturalHeight || 20;
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
@@ -680,7 +680,7 @@
                 if (!ariaLabel || !ariaLabel.includes("s-")) continue;
 
                 if (!ariaLabelToGroup[ariaLabel]) {
-                    ariaLabelToGroup[ariaLabel] = `Group ${numberToLettersForAriaID(groupCounter)}`;
+                    ariaLabelToGroup[ariaLabel] = `Group ${convertNumToLettersAriaID(groupCounter)}`;
                     groupCounter++;
                 }
                 const group = ariaLabelToGroup[ariaLabel];
@@ -704,7 +704,7 @@
         return sponsoredGroup ? groupMap[sponsoredGroup] : [];
     }
 
-    function numberToLettersForAriaID(num) {
+    function convertNumToLettersAriaID(num) {
         let result = '';
         while (num >= 0) {
             result = String.fromCharCode((num % 26) + 65) + result;
