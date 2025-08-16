@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3.4
+// @version      1.3.5
 // @description  Highlights and hides sponsored content on eBay
 // @author       Osborne Labs
 // @license      GPL-3
@@ -34,7 +34,7 @@
 (function() {
     "use strict";
 
-    const APP_TITLE = "Spotless";
+    const APP_NAME = "Spotless";
     const SPONSORED_CONTENT_KEY = "hideSponsoredContent";
 
     let hidingEnabled = localStorage.getItem(SPONSORED_CONTENT_KEY);
@@ -444,8 +444,8 @@
                 ${APP_ICONS.locked}
                 ${APP_ICONS.unlocked}
             </div>
-            <h2 class="panel-title" aria-level="1">${APP_TITLE}</h2>
-            <button id="minimizePanelButton" aria-label="Expands and minimizes the panel">
+            <h2 class="panel-title" aria-level="1">${APP_NAME}</h2>
+            <button id="minimizePanelButton" aria-label="Expands or minimizes the panel">
                 ${APP_ICONS.arrow}
             </button>
         `;
