@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.3.5
-// @description  Highlights and hides sponsored content on eBay
+// @version      1.4
+// @description  Highlights, hides, and cleans sponsored listings on eBay
 // @author       Osborne Labs
 // @license      GPL-3
 // @homepageURL  https://github.com/OsborneLabs/Spotless
@@ -35,9 +35,10 @@
     "use strict";
 
     const APP_NAME = "Spotless";
-    const SPONSORED_CONTENT_KEY = "hideSponsoredContent";
+    const APP_NAME_DEBUG = "SPOTLESS FOR EBAY";
+    const APP_KEY_SPONSORED_CONTENT = "hideSponsoredContent";
 
-    let hidingEnabled = localStorage.getItem(SPONSORED_CONTENT_KEY);
+    let hidingEnabled = localStorage.getItem(APP_KEY_SPONSORED_CONTENT);
     hidingEnabled = hidingEnabled !== "false";
     let highlightedSponsoredContent = [];
 
@@ -104,6 +105,10 @@
                 --thickness-highlight-border: 2px;
             }
 
+            #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
+                box-sizing: border-box;
+            }
+
             #panelWrapper {
                 position: fixed;
                 bottom: 10px;
@@ -112,7 +117,6 @@
                 width: 100%;
                 max-width: 320px;
                 padding: 0 16px;
-                box-sizing: border-box;
                 font-family: "Segoe UI", sans-serif;
             }
 
@@ -219,8 +223,8 @@
             }
 
             .lock-icon {
-                width: 24px;
-                height: 24px;
+                width: 28px;
+                height: 28px;
                 padding: 4px;
                 border-radius: 50%;
                 fill: var(--color-svg-fill);
@@ -364,7 +368,7 @@
     }
 
     function determineCurrentPage(sponsoredCount) {
-        if (sponsoredCount === 0) {
+        if (sponsoredCount <= 1) {
             return buildPanelErrorPage();
         }
         return buildPanelHomePage();
@@ -422,17 +426,17 @@
         const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
 
         if (!toggleSponsoredContentSwitchInput) {
-            updateLockIcons();
+            updateLockIcon();
             return;
         }
 
         toggleSponsoredContentSwitchInput.addEventListener("change", (e) => {
             hidingEnabled = e.target.checked;
-            localStorage.setItem(SPONSORED_CONTENT_KEY, hidingEnabled);
-            updateLockIcons();
+            localStorage.setItem(APP_KEY_SPONSORED_CONTENT, hidingEnabled);
+            updateLockIcon();
             debounceHighlighting();
         });
-        updateLockIcons();
+        updateLockIcon();
     }
 
     function buildPanelHeader() {
@@ -533,7 +537,7 @@
         errorPage.classList.add("error-page", "panel-page");
 
         const errorMessage = document.createElement("p");
-        errorMessage.textContent = "No sponsored content found. ";
+        errorMessage.textContent = "No sponsored content found";
         errorMessage.appendChild(document.createElement("br"));
 
         const outboundRetryPage = document.createElement("a");
@@ -555,8 +559,6 @@
         errorMessage.appendChild(document.createTextNode(" or "));
         errorMessage.appendChild(outboundStatusPage);
 
-        const endText = document.createTextNode(".");
-        errorMessage.appendChild(endText);
         errorPage.appendChild(errorMessage);
         return errorPage;
     }
@@ -578,7 +580,7 @@
         if (panelFooter) panelFooter.style.display = minimized ? "none" : "";
     }
 
-    function updateLockIcons() {
+    function updateLockIcon() {
         const locked = document.getElementById("lockedIcon");
         const unlocked = document.getElementById("unlockedIcon");
         locked.classList.toggle("active", hidingEnabled);
@@ -714,7 +716,7 @@
     }
 
     function detectSponsoredListingByInvertFilter() {
-        const INVERT_REGEX = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
+        const invertFilterRegex = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
 
         const sponsoredGroups = {};
         const classToInvertMap = {};
@@ -723,7 +725,7 @@
         styleTags.forEach(styleTag => {
             const css = styleTag.textContent;
             let match;
-            while ((match = INVERT_REGEX.exec(css)) !== null) {
+            while ((match = invertFilterRegex.exec(css)) !== null) {
                 const [_, className, color, invertValue] = match;
                 if (!classToInvertMap[className]) {
                     classToInvertMap[className] = [];
@@ -777,20 +779,27 @@
         };
     }
 
-    function detectSponsoredBanner() {
-        const tld = getEffectiveTLD();
-        if (tld !== "co.uk" && tld !== "com.au" && tld !== "de") return [];
+    function cleanListingURLS() {
+        const listingURLRegex = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)/;
+        let foundMatch = false;
 
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                const banners = Array.from(
-                    document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
-                ).filter((el) => {
-                    return !el.className.includes("srp-controls") && el.offsetHeight >= 100;
-                });
-                resolve(banners);
-            }, 525);
+        getListingElements().forEach((el) => {
+            const links = el.querySelectorAll("a[href*='/itm/']");
+            links.forEach((link) => {
+                const match = link.href.match(listingURLRegex);
+                if (match) {
+                    const tld = match[1];
+                    const itemId = match[2];
+                    const cleanUrl = `https://www.ebay.${tld}/itm/${itemId}`;
+                    link.href = cleanUrl;
+                    foundMatch = true;
+                }
+            });
         });
+
+        if (!foundMatch) {
+            console.debug(`${APP_NAME_DEBUG}: UNABLE TO CLEAN LISTING URLS`);
+        }
     }
 
     async function processSponsoredContent() {
@@ -826,11 +835,6 @@
                 });
             }
 
-            const banners = await detectSponsoredBanner();
-            banners.forEach(banner => {
-                detectedSponsoredElements.add(banner);
-            });
-
             requestAnimationFrame(() => {
                 for (const el of detectedSponsoredElements) {
                     if (!el.hasAttribute("data-sponsored-processed")) {
@@ -840,6 +844,8 @@
                     }
                 }
 
+                cleanListingURLS();
+
                 const count = detectedSponsoredElements.size;
                 countSponsoredContent(count);
 
@@ -848,7 +854,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error("Error processing sponsored content:", err);
+            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT:\n`, err);
             isProcessing = false;
             initializeObserver();
             return 0;
@@ -896,29 +902,6 @@
         });
     }
 
-    function getEffectiveTLD() {
-        const host = window.location.hostname;
-        const tldMap = {
-            "ebay.com.au": "com.au",
-            "ebay.com.hk": "com.hk",
-            "ebay.com.my": "com.my",
-            "ebay.com.sg": "com.sg",
-            "ebay.co.uk": "co.uk",
-            "ebay.at": "at",
-            "ebay.ca": "ca",
-            "ebay.ch": "ch",
-            "ebay.de": "de",
-            "ebay.es": "es",
-            "ebay.fr": "fr",
-            "ebay.ie": "ie",
-            "ebay.it": "it",
-            "ebay.nl": "nl",
-            "ebay.pl": "pl",
-            "ebay.com": "com",
-        };
-        return Object.entries(tldMap).find(([domain]) => host.endsWith(domain))?.[1] || "Unknown";
-    }
-
     const observer = new MutationObserver(() => {
         debounceHighlighting();
     });
@@ -936,13 +919,13 @@
     })();
 
     window.addEventListener("storage", (event) => {
-        if (event.key === SPONSORED_CONTENT_KEY) {
+        if (event.key === APP_KEY_SPONSORED_CONTENT) {
             const newValue = event.newValue === "true";
             if (newValue !== hidingEnabled) {
                 hidingEnabled = newValue;
                 const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
                 if (toggleSponsoredContentSwitchInput) toggleSponsoredContentSwitchInput.checked = hidingEnabled;
-                updateLockIcons();
+                updateLockIcon();
                 debounceHighlighting();
             }
         } else if (event.key === "panelMinimized") {
