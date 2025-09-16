@@ -1,28 +1,28 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.4
-// @description  Highlights, hides, and cleans sponsored listings on eBay
+// @version      1.5
+// @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
-// @license      GPL-3
+// @license      GPL-3.0
 // @homepageURL  https://github.com/OsborneLabs/Spotless
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNDcwLjYgNTEyIiB4bWw6c3BhY2U9InByZXNlcnZlIj4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxLjQwNjU5MzQwNjU5MzQwMTYgMS40MDY1OTM0MDY1OTM0MDE2KSBzY2FsZSgyLjgxIDIuODEpIj4KICAgIDxwYXRoIGZpbGw9IiM4NDg0ODQiIGQ9Ik0xMjcuOCw0Ni4xSDM4LjdWNDJjMC0yMy40LDE5LjEtNDIuNSw0Mi41LTQyLjVoNC4xYzIzLjQsMCw0Mi41LDE5LjEsNDIuNSw0Mi41VjQ2LjF6IE00Mi43LDQyaDgxVjQyIGMwLTIxLjItMTcuMi0zOC40LTM4LjQtMzguNGgtNC4xQzYwLDMuNSw0Mi43LDIwLjgsNDIuNyw0Mkw0Mi43LDQyeiI+PC9wYXRoPgogICAgPHBhdGggZmlsbD0iI0U1MzIzOCIgZD0iTTM1LjEsMTgxLjdoLTkuNmMtMTQuMywwLTI1LjktMTEuNi0yNS45LTI1LjlWNDkuNGMwLTUuMiw0LjMtOS41LDkuNS05LjVoMjYuMUwzNS4xLDE4MS43TDM1LjEsMTgxLjd6Ij48L3BhdGg+CiAgICA8cmVjdCB4PSIzNS4xIiB5PSIzOS45IiBmaWxsPSIjMDA2NEQyIiB3aWR0aD0iNDguMSIgaGVpZ2h0PSIxNDEuOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iODMuMiIgeT0iMzkuOSIgZmlsbD0iI0Y1QUYwMiIgd2lkdGg9IjQ4LjEiIGhlaWdodD0iMTQxLjgiPjwvcmVjdD4KICAgIDxwYXRoIGZpbGw9IiM4NkI4MTciIGQ9Ik0xNDEsMTgxLjdoLTkuNlYzOS45aDI2LjFjNS4yLDAsOS41LDQuMyw5LjUsOS41djEwNi40QzE2NywxNzAuMSwxNTUuMywxODEuNywxNDEsMTgxLjd6Ij48L3BhdGg+CiAgPC9nPgo8L3N2Zz4K
-// @match        https://www.ebay.com/sch/*
-// @match        https://www.ebay.at/sch/*
-// @match        https://www.ebay.ca/sch/*
-// @match        https://www.ebay.ch/sch/*
-// @match        https://www.ebay.com.au/sch/*
-// @match        https://www.ebay.com.hk/sch/*
-// @match        https://www.ebay.com.my/sch/*
-// @match        https://www.ebay.com.sg/sch/*
-// @match        https://www.ebay.co.uk/sch/*
-// @match        https://www.ebay.de/sch/*
-// @match        https://www.ebay.es/sch/*
-// @match        https://www.ebay.fr/sch/*
-// @match        https://www.ebay.ie/sch/*
-// @match        https://www.ebay.it/sch/*
-// @match        https://www.ebay.nl/sch/*
-// @match        https://www.ebay.pl/sch/*
+// @match        https://www.ebay.com/*
+// @match        https://www.ebay.at/*
+// @match        https://www.ebay.ca/*
+// @match        https://www.ebay.ch/*
+// @match        https://www.ebay.com.au/*
+// @match        https://www.ebay.com.hk/*
+// @match        https://www.ebay.com.my/*
+// @match        https://www.ebay.com.sg/*
+// @match        https://www.ebay.co.uk/*
+// @match        https://www.ebay.de/*
+// @match        https://www.ebay.es/*
+// @match        https://www.ebay.fr/*
+// @match        https://www.ebay.ie/*
+// @match        https://www.ebay.it/*
+// @match        https://www.ebay.nl/*
+// @match        https://www.ebay.pl/*
 // @run-at       document-start
 // @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
 // @updateURL    https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
@@ -65,14 +65,12 @@
             </svg>`
     };
 
-    function init() {
-        initializeUI();
-        processSponsoredContent();
-    }
-
-    function initializeUI() {
+    async function init() {
+        observeURLMutation();
         createStyles();
         buildPanel();
+        hideShowPanel();
+        await processSponsoredContent();
     }
 
     function createStyles() {
@@ -98,8 +96,8 @@
                 --color-svg-fill: white;
                 --color-svg-fill-heart-hover: red;
                 --color-switch-knob: white;
-                --color-switch-off: #ccc;
                 --color-switch-on: #2AA866;
+                --color-switch-off: #ccc;
                 --color-switch-on-shadow: 0 0 4px rgba(39, 174, 96, 0.3);
 
                 --thickness-highlight-border: 2px;
@@ -132,6 +130,10 @@
             }
 
             #panelBox {
+                display: none;
+            }
+
+            #panelBox.show {
                 display: flex;
                 flex-direction: column;
                 gap: 0px;
@@ -147,6 +149,15 @@
 
             #panelBox:hover {
                 transform: translateY(-2px);
+            }
+
+            #panelBox.minimized #arrowIcon {
+                transform: rotate(180deg);
+            }
+
+            #panelBox.minimized {
+                padding: 12px;
+                overflow: hidden;
             }
 
             #panelHeader {
@@ -178,7 +189,7 @@
                 margin-top: 5px;
             }
 
-            .panelFooter {
+            .panel-footer {
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
@@ -187,7 +198,7 @@
                 color: var(--color-font-text);
             }
 
-            .panelPageContainer {
+            .panel-page-container {
                 position: relative;
                 width: 100%;
             }
@@ -211,15 +222,6 @@
                 justify-content: center;
                 cursor: pointer;
                 box-sizing: content-box;
-            }
-
-            #panelBox.minimized #arrowIcon {
-                transform: rotate(180deg);
-            }
-
-            #panelBox.minimized {
-                padding: 12px;
-                overflow: hidden;
             }
 
             .lock-icon {
@@ -331,12 +333,12 @@
                 transform: translateX(20px);
             }
 
-            #creator-page {
+            #creatorPage {
                 color: var(--color-font-text);
                 transition: color 0.3s ease;
             }
 
-            #creator-page:hover, .outbound-status-page:hover, .retry-page:hover{
+            #creatorPage:hover, .outbound-status-page:hover, .retry-page:hover{
                 color: var(--color-font-link-hover);
             }
 
@@ -363,15 +365,11 @@
                 display: none !important;
             }
 
+            .sponsored-hidden-banner {
+            display: none !important;
+            }
         `;
         document.head.appendChild(style);
-    }
-
-    function determineCurrentPage(sponsoredCount) {
-        if (sponsoredCount <= 1) {
-            return buildPanelErrorPage();
-        }
-        return buildPanelHomePage();
     }
 
     function initializeObserver() {
@@ -383,6 +381,44 @@
         observerInitialized = true;
     }
 
+    function validateCurrentURL() {
+        const url = new URL(location.href);
+        const params = url.searchParams;
+
+        const isSearchPage = /^https:\/\/www\.ebay\.[a-z.]+\/sch\//i.test(url.href);
+        const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
+        const isSellerPage = params.has("_ssn");
+        const isSoldPage = params.get("LH_Sold") === "1";
+
+        return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isSoldPage;
+    }
+
+    function observeURLMutation() {
+        let lastUrl = location.href;
+
+        const observeURL = () => {
+            const currentUrl = location.href;
+            if (currentUrl !== lastUrl) {
+                lastUrl = currentUrl;
+                hideShowPanel();
+                scheduleHighlightUpdate();
+            }
+        };
+        const pushState = history.pushState;
+        history.pushState = function() {
+            pushState.apply(history, arguments);
+            observeURL();
+        };
+        const replaceState = history.replaceState;
+        history.replaceState = function() {
+            replaceState.apply(history, arguments);
+            observeURL();
+        };
+        window.addEventListener("popstate", observeURL);
+        window.addEventListener("hashchange", observeURL);
+        setInterval(observeURL, 1000);
+    }
+
     async function buildPanel() {
         const wrapper = document.createElement("div");
         wrapper.id = "panelWrapper";
@@ -392,7 +428,7 @@
 
         const header = buildPanelHeader();
         const sponsoredCount = await processSponsoredContent();
-        const body = determineCurrentPage(sponsoredCount, hidingEnabled);
+        const body = determinePanelState(sponsoredCount, hidingEnabled);
         const footer = buildPanelFooter();
 
         const topDivider = document.createElement("hr");
@@ -417,24 +453,22 @@
             const newState = !isCurrentlyMinimized;
 
             localStorage.setItem("panelMinimized", newState);
-            setPanelMinimized(newState);
+            minimizePanel(newState);
         });
 
         const isPanelMinimized = localStorage.getItem("panelMinimized") === "true";
-        setPanelMinimized(isPanelMinimized);
+        minimizePanel(isPanelMinimized);
 
         const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
-
         if (!toggleSponsoredContentSwitchInput) {
             updateLockIcon();
             return;
         }
-
         toggleSponsoredContentSwitchInput.addEventListener("change", (e) => {
             hidingEnabled = e.target.checked;
             localStorage.setItem(APP_KEY_SPONSORED_CONTENT, hidingEnabled);
             updateLockIcon();
-            debounceHighlighting();
+            scheduleHighlightUpdate();
         });
         updateLockIcon();
     }
@@ -458,14 +492,14 @@
 
     function buildPanelFooter() {
         const footer = document.createElement("div");
-        footer.className = "panelFooter";
+        footer.className = "panel-footer";
 
         const creatorPage = document.createElement("a");
         creatorPage.href = "https://github.com/OsborneLabs/Spotless";
         creatorPage.target = "_blank";
         creatorPage.style.textDecoration = "none";
         creatorPage.textContent = "Osborne";
-        creatorPage.id = "creator-page";
+        creatorPage.id = "creatorPage";
 
         const separator = document.createElement("span");
         separator.textContent = " · ";
@@ -496,7 +530,7 @@
             <span>Content found</span>
             <span id="countBubble">0</span>
         `);
-        row.id = "count-sponsored-content-row";
+        row.id = "countSponsoredContentRow";
         return row;
     }
 
@@ -508,14 +542,14 @@
                 <span class="slider"></span>
             </label>
         `);
-        row.id = "toggle-sponsored-content-row";
+        row.id = "toggleSponsoredContentRow";
         return row;
     }
 
     function buildPanelHomePage() {
         const pageContainer = document.createElement("div");
-        pageContainer.id = "panelPageContainer";
-        pageContainer.classList.add("panelPageContainer");
+        pageContainer.id = "panelPagecontainer";
+        pageContainer.classList.add("panel-page-container");
 
         const homePage = document.createElement("div");
         homePage.id = "homePage";
@@ -563,21 +597,39 @@
         return errorPage;
     }
 
-    function setPanelMinimized(minimized) {
+    function minimizePanel(minimized) {
         const panelBox = document.getElementById("panelBox");
         if (!panelBox) return;
 
         const panelPage = panelBox.querySelector(".panel-page");
-        const sectionDividers = panelBox.querySelectorAll(".section-divider");
-        const panelFooter = panelBox.querySelector(".panelFooter");
+        const sectionDivider = panelBox.querySelectorAll(".section-divider");
+        const panelFooter = panelBox.querySelector(".panel-footer");
 
         panelBox.classList.toggle("minimized", minimized);
-
         if (panelPage) panelPage.style.display = minimized ? "none" : "block";
-        sectionDividers.forEach(el => {
+        sectionDivider.forEach(el => {
             el.style.display = minimized ? "none" : "";
         });
         if (panelFooter) panelFooter.style.display = minimized ? "none" : "";
+    }
+
+    function hideShowPanel() {
+        const panelBox = document.getElementById("panelBox");
+
+        if (!panelBox) return;
+        const isSearchPage = validateCurrentURL();
+        if (isSearchPage) {
+            panelBox.classList.add("show");
+        } else {
+            panelBox.classList.remove("show");
+        }
+    }
+
+    function determinePanelState(sponsoredCount) {
+        if (sponsoredCount < 2 || sponsoredCount > 20) {
+            return buildPanelErrorPage();
+        }
+        return buildPanelHomePage();
     }
 
     function updateLockIcon() {
@@ -587,13 +639,22 @@
         unlocked.classList.toggle("active", !hidingEnabled);
     }
 
-    function getListingElements() {
-        return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
-            (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
-        );
+    function detectSponsoredBanner() {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const banners = Array.from(
+                    document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
+                ).filter((el) => el.offsetHeight >= 140);
+
+                banners.forEach(banner => {
+                    banner.classList.add("sponsored-hidden-banner");
+                });
+                resolve(banners);
+            }, 525);
+        });
     }
 
-    function detectSponsoredListingByBase64(batchSize = 5) {
+    function detectSponsoredListingBySVG(batchSize = 5) {
         return new Promise((resolve) => {
             const listings = getListingElements();
             const sponsoredElements = [];
@@ -615,7 +676,6 @@
 
                     const backgroundImage = getComputedStyle(svgImage.parentElement).backgroundImage;
                     const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
-
                     if (!match || !match[1]) return done();
 
                     const base64 = match[1];
@@ -632,16 +692,20 @@
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
+                        const colors = new Set();
+
                         for (let i = 0; i < imageData.length; i += 4) {
                             const r = imageData[i];
                             const g = imageData[i + 1];
                             const b = imageData[i + 2];
                             const a = imageData[i + 3];
 
-                            if (a > 0 && r === 112 && g === 112 && b === 112) {
-                                sponsoredElements.push(listing);
-                                break;
+                            if (a > 0) {
+                                colors.add(`${r},${g},${b}`);
                             }
+                        }
+                        if (colors.size > 1) {
+                            sponsoredElements.push(listing);
                         }
                         done();
                     };
@@ -668,55 +732,8 @@
         });
     }
 
-    function detectSponsoredListingByAriaID(listings = getListingElements()) {
-        const groupMap = {};
-        const ariaLabelToGroup = {};
-        let groupCounter = 0;
-
-        listings.forEach(listing => {
-            const labelSpans = Array.from(listing.querySelectorAll('span[aria-labelledby]'));
-            if (labelSpans.length === 0) return;
-
-            for (const spanElement of labelSpans) {
-                const ariaLabel = spanElement.getAttribute('aria-labelledby');
-                if (!ariaLabel || !ariaLabel.includes("s-")) continue;
-
-                if (!ariaLabelToGroup[ariaLabel]) {
-                    ariaLabelToGroup[ariaLabel] = `Group ${convertNumToLettersAriaID(groupCounter)}`;
-                    groupCounter++;
-                }
-                const group = ariaLabelToGroup[ariaLabel];
-                if (!groupMap[group]) {
-                    groupMap[group] = [];
-                }
-                groupMap[group].push(listing);
-                break;
-            }
-        });
-
-        let sponsoredGroup = null;
-        let minCount = Infinity;
-
-        for (const [group, groupListings] of Object.entries(groupMap)) {
-            if (groupListings.length < minCount) {
-                sponsoredGroup = group;
-                minCount = groupListings.length;
-            }
-        }
-        return sponsoredGroup ? groupMap[sponsoredGroup] : [];
-    }
-
-    function convertNumToLettersAriaID(num) {
-        let result = '';
-        while (num >= 0) {
-            result = String.fromCharCode((num % 26) + 65) + result;
-            num = Math.floor(num / 26) - 1;
-        }
-        return result;
-    }
-
-    function detectSponsoredListingByInvertFilter() {
-        const invertFilterRegex = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
+    function detectSponsoredListingByInvertStyle() {
+        const invertStyleMatch = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
 
         const sponsoredGroups = {};
         const classToInvertMap = {};
@@ -725,7 +742,7 @@
         styleTags.forEach(styleTag => {
             const css = styleTag.textContent;
             let match;
-            while ((match = invertFilterRegex.exec(css)) !== null) {
+            while ((match = invertStyleMatch.exec(css)) !== null) {
                 const [_, className, color, invertValue] = match;
                 if (!classToInvertMap[className]) {
                     classToInvertMap[className] = [];
@@ -761,45 +778,19 @@
             }
             sponsoredGroups[key].push(container);
         });
-
         const groupEntries = Object.entries(sponsoredGroups);
         if (groupEntries.length === 0) {
             return {
                 allGroups: []
             };
         }
-
         const sortedGroups = groupEntries.sort((a, b) => a[1].length - b[1].length);
         const [sponsoredInvert, sponsoredList] = sortedGroups[0];
-
         return {
             invert: parseFloat(sponsoredInvert),
             elements: sponsoredList,
             allGroups: groupEntries
         };
-    }
-
-    function cleanListingURLS() {
-        const listingURLRegex = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)/;
-        let foundMatch = false;
-
-        getListingElements().forEach((el) => {
-            const links = el.querySelectorAll("a[href*='/itm/']");
-            links.forEach((link) => {
-                const match = link.href.match(listingURLRegex);
-                if (match) {
-                    const tld = match[1];
-                    const itemId = match[2];
-                    const cleanUrl = `https://www.ebay.${tld}/itm/${itemId}`;
-                    link.href = cleanUrl;
-                    foundMatch = true;
-                }
-            });
-        });
-
-        if (!foundMatch) {
-            console.debug(`${APP_NAME_DEBUG}: UNABLE TO CLEAN LISTING URLS`);
-        }
     }
 
     async function processSponsoredContent() {
@@ -810,25 +801,16 @@
             observer.disconnect();
             resetDesignateSponsoredContent();
 
-            const listings = getListingElements();
-            const unprocessedListings = listings.filter(el => !el.hasAttribute("data-sponsored-processed"));
             const detectedSponsoredElements = new Set();
 
-            const base64Results = await detectSponsoredListingByBase64();
+            const base64Results = await detectSponsoredListingBySVG();
             base64Results.forEach(el => {
                 const li = el.closest("li");
                 if (li) detectedSponsoredElements.add(li);
             });
 
             if (detectedSponsoredElements.size === 0) {
-                const ariaMethod = detectSponsoredListingByAriaID(unprocessedListings);
-                ariaMethod.forEach(listing => {
-                    const li = listing.closest("li");
-                    if (li) detectedSponsoredElements.add(li);
-                });
-            }
-            if (detectedSponsoredElements.size === 0) {
-                const invertMethod = detectSponsoredListingByInvertFilter();
+                const invertMethod = detectSponsoredListingByInvertStyle();
                 invertMethod.elements?.forEach(container => {
                     const li = container.closest("li");
                     if (li) detectedSponsoredElements.add(li);
@@ -843,8 +825,9 @@
                         hideShowSponsoredContent(el, hidingEnabled);
                     }
                 }
-
                 cleanListingURLS();
+                cleanGeneralURLs();
+                hideShowPanel();
 
                 const count = detectedSponsoredElements.size;
                 countSponsoredContent(count);
@@ -854,7 +837,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT:\n`, err);
+            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR BELOW\n`, err);
             isProcessing = false;
             initializeObserver();
             return 0;
@@ -892,7 +875,64 @@
         if (countBubble) countBubble.textContent = count;
     }
 
-    function debounceHighlighting() {
+    function getListingElements() {
+        return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
+            (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
+        );
+    }
+
+    function cleanListingURLS() {
+        const listingURLMatch = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/;
+
+        const links = document.querySelectorAll("a[href*='/itm/']");
+        links.forEach((link) => {
+            const match = link.href.match(listingURLMatch);
+            if (match) {
+                const tld = match[1];
+                const itemId = match[2];
+                const cleanUrl = `https://www.ebay.${tld}/itm/${itemId}`;
+                if (link.href !== cleanUrl) {
+                    link.href = cleanUrl;
+                }
+            }
+        });
+    }
+
+    function cleanGeneralURLs() {
+        const links = document.querySelectorAll("a[href*='ebay.']");
+
+        const trackingParams = new Set([
+            "_trkparms",
+            "_trksid",
+            "source",
+            "sr"
+        ]);
+
+        links.forEach((link) => {
+            try {
+                const url = new URL(link.href);
+                const tldMatch = url.hostname.match(/(?:^|\.)ebay\.([a-z.]+)$/);
+                if (!tldMatch) return;
+
+                const hash = url.hash || "";
+                const params = new URLSearchParams(url.search);
+                trackingParams.forEach(param => params.delete(param));
+
+                for (const key of [...params.keys()]) {
+                    if (key.startsWith("utm_")) {
+                        params.delete(key);
+                    }
+                }
+                const queryString = params.toString();
+                const cleanUrl = `${url.origin}${url.pathname}${queryString ? "?" + queryString : ""}${hash}`;
+                if (link.href !== cleanUrl) {
+                    link.href = cleanUrl;
+                }
+            } catch (e) {}
+        });
+    }
+
+    function scheduleHighlightUpdate() {
         if (updateScheduled || isProcessing) return;
         updateScheduled = true;
         requestAnimationFrame(() => {
@@ -902,19 +942,39 @@
         });
     }
 
+    function cleanListingObserver() {
+        const urlCleanListingObserver = new MutationObserver(() => {
+            cleanListingURLS();
+        });
+        urlCleanListingObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['href'],
+        });
+    }
+
     const observer = new MutationObserver(() => {
-        debounceHighlighting();
+        hideShowPanel();
+        scheduleHighlightUpdate();
     });
 
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', cleanListingObserver);
+    } else {
+        cleanListingObserver();
+    }
+
     (async function() {
-        if (document.readyState === "complete" || document.readyState === "interactive") {
+        const delayedInit = async () => {
             await new Promise(r => setTimeout(r, 200));
             init();
+            detectSponsoredBanner();
+        };
+        if (document.readyState === "complete" || document.readyState === "interactive") {
+            await delayedInit();
         } else {
-            window.addEventListener("DOMContentLoaded", async () => {
-                await new Promise(r => setTimeout(r, 200));
-                init();
-            });
+            window.addEventListener("DOMContentLoaded", delayedInit);
         }
     })();
 
@@ -926,10 +986,10 @@
                 const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
                 if (toggleSponsoredContentSwitchInput) toggleSponsoredContentSwitchInput.checked = hidingEnabled;
                 updateLockIcon();
-                debounceHighlighting();
+                scheduleHighlightUpdate();
             }
         } else if (event.key === "panelMinimized") {
-            setPanelMinimized(event.newValue === "true");
+            minimizePanel(event.newValue === "true");
         }
     });
 })();
