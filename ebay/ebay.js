@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.5
+// @version      1.5.1
 // @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -639,21 +639,6 @@
         unlocked.classList.toggle("active", !hidingEnabled);
     }
 
-    function detectSponsoredBanner() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                const banners = Array.from(
-                    document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
-                ).filter((el) => el.offsetHeight >= 140);
-
-                banners.forEach(banner => {
-                    banner.classList.add("sponsored-hidden-banner");
-                });
-                resolve(banners);
-            }, 525);
-        });
-    }
-
     function detectSponsoredListingBySVG(batchSize = 5) {
         return new Promise((resolve) => {
             const listings = getListingElements();
@@ -693,13 +678,11 @@
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
                         const colors = new Set();
-
                         for (let i = 0; i < imageData.length; i += 4) {
                             const r = imageData[i];
                             const g = imageData[i + 1];
                             const b = imageData[i + 2];
                             const a = imageData[i + 3];
-
                             if (a > 0) {
                                 colors.add(`${r},${g},${b}`);
                             }
@@ -730,6 +713,27 @@
                 processBatch();
             }
         });
+    }
+
+    function detectSponsoredListingBySeparatorSize() {
+        const listings = getListingElements();
+        const sponsoredListings = [];
+
+        listings.forEach(listing => {
+            const separatorSpan = listing.querySelector('span.s-item__sep');
+
+            if (!separatorSpan) return;
+            const innerSpan = separatorSpan.querySelector('span');
+
+            const width = innerSpan?.offsetWidth || 0;
+            const height = innerSpan?.offsetHeight || 0;
+            const isSponsored = width > 0 && height > 0;
+
+            if (isSponsored) {
+                sponsoredListings.push(listing);
+            }
+        });
+        return sponsoredListings;
     }
 
     function detectSponsoredListingByInvertStyle() {
@@ -793,6 +797,21 @@
         };
     }
 
+    function detectSponsoredBanner() {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const banners = Array.from(
+                    document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
+                ).filter((el) => el.offsetHeight >= 140);
+
+                banners.forEach(banner => {
+                    banner.classList.add("sponsored-hidden-banner");
+                });
+                resolve(banners);
+            }, 525);
+        });
+    }
+
     async function processSponsoredContent() {
         if (isProcessing) return 0;
         isProcessing = true;
@@ -808,7 +827,10 @@
                 const li = el.closest("li");
                 if (li) detectedSponsoredElements.add(li);
             });
-
+            if (detectedSponsoredElements.size === 0) {
+                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
+                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
+            }
             if (detectedSponsoredElements.size === 0) {
                 const invertMethod = detectSponsoredListingByInvertStyle();
                 invertMethod.elements?.forEach(container => {
@@ -837,7 +859,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR BELOW\n`, err);
+            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
             isProcessing = false;
             initializeObserver();
             return 0;
@@ -904,6 +926,7 @@
         const trackingParams = new Set([
             "_trkparms",
             "_trksid",
+            "promoted_items",
             "source",
             "sr"
         ]);
