@@ -4,6 +4,6 @@
 <div align="center">
 
   ![Version](https://img.shields.io/badge/Version-v1.5-blue?style=flat-square) 
-  ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
+  ![Status](https://img.shields.io/badge/Status-Down-red?style=flat-square)
 
 </div>
