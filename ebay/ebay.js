@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.5.2
+// @version      1.5.3
 // @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -937,7 +937,6 @@
                         params.delete(param);
                     }
                 });
-
                 for (const key of [...params.keys()]) {
                     if (key.startsWith("utm_") || key.startsWith("_trk")) {
                         params.delete(key);
@@ -946,7 +945,6 @@
                 const cleanUrl = `${url.origin}${url.pathname}${params.toString() ? '?' + params.toString() : ''}${url.hash}`;
                 if (link.href !== cleanUrl) {
                     link.href = cleanUrl;
-                    console.log('Cleaned URL:', cleanUrl);
                 }
             } catch (e) {}
         });
