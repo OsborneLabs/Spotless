@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.5.1
+// @version      1.5.2
 // @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
 // @license      GPL-3.0
 // @homepageURL  https://github.com/OsborneLabs/Spotless
+// @supportURL   https://github.com/OsborneLabs/Spotless/issues
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNDcwLjYgNTEyIiB4bWw6c3BhY2U9InByZXNlcnZlIj4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxLjQwNjU5MzQwNjU5MzQwMTYgMS40MDY1OTM0MDY1OTM0MDE2KSBzY2FsZSgyLjgxIDIuODEpIj4KICAgIDxwYXRoIGZpbGw9IiM4NDg0ODQiIGQ9Ik0xMjcuOCw0Ni4xSDM4LjdWNDJjMC0yMy40LDE5LjEtNDIuNSw0Mi41LTQyLjVoNC4xYzIzLjQsMCw0Mi41LDE5LjEsNDIuNSw0Mi41VjQ2LjF6IE00Mi43LDQyaDgxVjQyIGMwLTIxLjItMTcuMi0zOC40LTM4LjQtMzguNGgtNC4xQzYwLDMuNSw0Mi43LDIwLjgsNDIuNyw0Mkw0Mi43LDQyeiI+PC9wYXRoPgogICAgPHBhdGggZmlsbD0iI0U1MzIzOCIgZD0iTTM1LjEsMTgxLjdoLTkuNmMtMTQuMywwLTI1LjktMTEuNi0yNS45LTI1LjlWNDkuNGMwLTUuMiw0LjMtOS41LDkuNS05LjVoMjYuMUwzNS4xLDE4MS43TDM1LjEsMTgxLjd6Ij48L3BhdGg+CiAgICA8cmVjdCB4PSIzNS4xIiB5PSIzOS45IiBmaWxsPSIjMDA2NEQyIiB3aWR0aD0iNDguMSIgaGVpZ2h0PSIxNDEuOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iODMuMiIgeT0iMzkuOSIgZmlsbD0iI0Y1QUYwMiIgd2lkdGg9IjQ4LjEiIGhlaWdodD0iMTQxLjgiPjwvcmVjdD4KICAgIDxwYXRoIGZpbGw9IiM4NkI4MTciIGQ9Ik0xNDEsMTgxLjdoLTkuNlYzOS45aDI2LjFjNS4yLDAsOS41LDQuMyw5LjUsOS41djEwNi40QzE2NywxNzAuMSwxNTUuMywxODEuNywxNDEsMTgxLjd6Ij48L3BhdGg+CiAgPC9nPgo8L3N2Zz4K
 // @match        https://www.ebay.com/*
 // @match        https://www.ebay.at/*
@@ -65,6 +66,8 @@
             </svg>`
     };
 
+    const APP_BLOCK_PARAMETERS = ["campaign", "promoted_items", "source", "sr"];
+
     async function init() {
         observeURLMutation();
         createStyles();
@@ -98,7 +101,6 @@
                 --color-switch-knob: white;
                 --color-switch-on: #2AA866;
                 --color-switch-off: #ccc;
-                --color-switch-on-shadow: 0 0 4px rgba(39, 174, 96, 0.3);
 
                 --thickness-highlight-border: 2px;
             }
@@ -326,7 +328,6 @@
 
             input:checked + .slider {
                 background-color: var(--color-switch-on);
-                box-shadow: var(--color-switch-on-shadow);
             }
 
             input:checked + .slider:before {
@@ -338,7 +339,7 @@
                 transition: color 0.3s ease;
             }
 
-            #creatorPage:hover, .outbound-status-page:hover, .retry-page:hover{
+            #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover{
                 color: var(--color-font-link-hover);
             }
 
@@ -347,12 +348,12 @@
                 font-size: var(--size-font-body-error);
             }
 
-            .outbound-status-page, .retry-page {
+            .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
                 color: var(--color-font-text);
             }
 
-            .outbound-status-page:visited, .retry-page:visited {
+            .outbound-status-page:visited, .outbound-update-page:visited {
                 color: var(--color-font-link-visited);
             }
 
@@ -497,6 +498,7 @@
         const creatorPage = document.createElement("a");
         creatorPage.href = "https://github.com/OsborneLabs/Spotless";
         creatorPage.target = "_blank";
+        creatorPage.rel = "noopener noreferrer";
         creatorPage.style.textDecoration = "none";
         creatorPage.textContent = "Osborne";
         creatorPage.id = "creatorPage";
@@ -507,6 +509,7 @@
         const donatePage = document.createElement("a");
         donatePage.href = "https://ko-fi.com/osbornelabs";
         donatePage.target = "_blank";
+        donatePage.rel = "noopener noreferrer";
         donatePage.innerHTML = APP_ICONS.heart;
         donatePage.style.display = "inline-flex";
         donatePage.style.alignItems = "center";
@@ -574,22 +577,21 @@
         errorMessage.textContent = "No sponsored content found";
         errorMessage.appendChild(document.createElement("br"));
 
-        const outboundRetryPage = document.createElement("a");
-        outboundRetryPage.textContent = "Retry";
-        outboundRetryPage.href = "#";
-        outboundRetryPage.addEventListener("click", function(event) {
-            event.preventDefault();
-            location.reload();
-        });
-        outboundRetryPage.classList.add("retry-page");
+        const outboundUpdatePage = document.createElement("a");
+        outboundUpdatePage.textContent = "Update";
+        outboundUpdatePage.href = "https://greasyfork.org/en/scripts/541981";
+        outboundUpdatePage.target = "_blank";
+        outboundUpdatePage.rel = "noopener noreferrer";
+        outboundUpdatePage.classList.add("outbound-update-page");
 
         const outboundStatusPage = document.createElement("a");
         outboundStatusPage.textContent = "check status";
         outboundStatusPage.href = "https://github.com/OsborneLabs/Spotless";
         outboundStatusPage.target = "_blank";
+        outboundStatusPage.rel = "noopener noreferrer";
         outboundStatusPage.classList.add("outbound-status-page");
 
-        errorMessage.appendChild(outboundRetryPage);
+        errorMessage.appendChild(outboundUpdatePage);
         errorMessage.appendChild(document.createTextNode(" or "));
         errorMessage.appendChild(outboundStatusPage);
 
@@ -838,7 +840,6 @@
                     if (li) detectedSponsoredElements.add(li);
                 });
             }
-
             requestAnimationFrame(() => {
                 for (const el of detectedSponsoredElements) {
                     if (!el.hasAttribute("data-sponsored-processed")) {
@@ -923,33 +924,29 @@
     function cleanGeneralURLs() {
         const links = document.querySelectorAll("a[href*='ebay.']");
 
-        const trackingParams = new Set([
-            "_trkparms",
-            "_trksid",
-            "promoted_items",
-            "source",
-            "sr"
-        ]);
-
         links.forEach((link) => {
             try {
                 const url = new URL(link.href);
                 const tldMatch = url.hostname.match(/(?:^|\.)ebay\.([a-z.]+)$/);
                 if (!tldMatch) return;
 
-                const hash = url.hash || "";
                 const params = new URLSearchParams(url.search);
-                trackingParams.forEach(param => params.delete(param));
+
+                APP_BLOCK_PARAMETERS.forEach(param => {
+                    if (params.has(param)) {
+                        params.delete(param);
+                    }
+                });
 
                 for (const key of [...params.keys()]) {
-                    if (key.startsWith("utm_")) {
+                    if (key.startsWith("utm_") || key.startsWith("_trk")) {
                         params.delete(key);
                     }
                 }
-                const queryString = params.toString();
-                const cleanUrl = `${url.origin}${url.pathname}${queryString ? "?" + queryString : ""}${hash}`;
+                const cleanUrl = `${url.origin}${url.pathname}${params.toString() ? '?' + params.toString() : ''}${url.hash}`;
                 if (link.href !== cleanUrl) {
                     link.href = cleanUrl;
+                    console.log('Cleaned URL:', cleanUrl);
                 }
             } catch (e) {}
         });
