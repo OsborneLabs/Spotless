@@ -1,12 +1,11 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.5.3
+// @version      1.6.0
 // @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
 // @license      GPL-3.0
 // @homepageURL  https://github.com/OsborneLabs/Spotless
-// @supportURL   https://github.com/OsborneLabs/Spotless/issues
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNDcwLjYgNTEyIiB4bWw6c3BhY2U9InByZXNlcnZlIj4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxLjQwNjU5MzQwNjU5MzQwMTYgMS40MDY1OTM0MDY1OTM0MDE2KSBzY2FsZSgyLjgxIDIuODEpIj4KICAgIDxwYXRoIGZpbGw9IiM4NDg0ODQiIGQ9Ik0xMjcuOCw0Ni4xSDM4LjdWNDJjMC0yMy40LDE5LjEtNDIuNSw0Mi41LTQyLjVoNC4xYzIzLjQsMCw0Mi41LDE5LjEsNDIuNSw0Mi41VjQ2LjF6IE00Mi43LDQyaDgxVjQyIGMwLTIxLjItMTcuMi0zOC40LTM4LjQtMzguNGgtNC4xQzYwLDMuNSw0Mi43LDIwLjgsNDIuNyw0Mkw0Mi43LDQyeiI+PC9wYXRoPgogICAgPHBhdGggZmlsbD0iI0U1MzIzOCIgZD0iTTM1LjEsMTgxLjdoLTkuNmMtMTQuMywwLTI1LjktMTEuNi0yNS45LTI1LjlWNDkuNGMwLTUuMiw0LjMtOS41LDkuNS05LjVoMjYuMUwzNS4xLDE4MS43TDM1LjEsMTgxLjd6Ij48L3BhdGg+CiAgICA8cmVjdCB4PSIzNS4xIiB5PSIzOS45IiBmaWxsPSIjMDA2NEQyIiB3aWR0aD0iNDguMSIgaGVpZ2h0PSIxNDEuOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iODMuMiIgeT0iMzkuOSIgZmlsbD0iI0Y1QUYwMiIgd2lkdGg9IjQ4LjEiIGhlaWdodD0iMTQxLjgiPjwvcmVjdD4KICAgIDxwYXRoIGZpbGw9IiM4NkI4MTciIGQ9Ik0xNDEsMTgxLjdoLTkuNlYzOS45aDI2LjFjNS4yLDAsOS41LDQuMyw5LjUsOS41djEwNi40QzE2NywxNzAuMSwxNTUuMywxODEuNywxNDEsMTgxLjd6Ij48L3BhdGg+CiAgPC9nPgo8L3N2Zz4K
 // @match        https://www.ebay.com/*
 // @match        https://www.ebay.at/*
@@ -25,6 +24,7 @@
 // @match        https://www.ebay.nl/*
 // @match        https://www.ebay.pl/*
 // @run-at       document-start
+// @supportURL   https://github.com/OsborneLabs/Spotless/issues
 // @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
 // @updateURL    https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.meta.js
 // @grant        none
@@ -80,12 +80,10 @@
         const style = document.createElement("style");
         style.textContent = `
             :root {
-
                 --size-font-title: 18px;
                 --size-font-body: 14px;
                 --size-font-body-error: 16px;
                 --size-font-footer: 12px;
-
                 --color-font-text: white;
                 --color-font-link-hover: lightblue;
                 --color-font-link-visited: lightblue;
@@ -101,14 +99,11 @@
                 --color-switch-knob: white;
                 --color-switch-on: #2AA866;
                 --color-switch-off: #ccc;
-
                 --thickness-highlight-border: 2px;
             }
-
             #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
                 box-sizing: border-box;
             }
-
             #panelWrapper {
                 position: fixed;
                 bottom: 10px;
@@ -119,7 +114,6 @@
                 padding: 0 16px;
                 font-family: "Segoe UI", sans-serif;
             }
-
             @media (max-width: 768px) {
                 #panelWrapper {
                     bottom: 5px;
@@ -130,11 +124,9 @@
                     padding: 0 16px;
                 }
             }
-
             #panelBox {
                 display: none;
             }
-
             #panelBox.show {
                 display: flex;
                 flex-direction: column;
@@ -148,33 +140,28 @@
                 box-shadow: var(--color-panel-shadow);
                 transition: transform 0.2s ease;
             }
-
             #panelBox:hover {
                 transform: translateY(-2px);
             }
-
             #panelBox.minimized #arrowIcon {
                 transform: rotate(180deg);
             }
-
             #panelBox.minimized {
                 padding: 12px;
                 overflow: hidden;
             }
-
             #panelHeader {
                 display: flex;
                 align-items: center;
+                height: 30px;
                 gap: 8px;
             }
-
             #panelHeader h2.panel-title {
                 font-size: var(--size-font-title);
                 font-weight: 600;
                 margin: 0;
                 color: var(--color-font-text);
             }
-
             .panel-body-row {
                 margin: 0;
                 font-size: var(--size-font-body);
@@ -186,12 +173,11 @@
                 padding: 12px 16px;
                 border-radius: 8px;
             }
-
             .panel-body-row + .panel-body-row {
                 margin-top: 5px;
             }
-
             .panel-footer {
+                height: 15px;
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
@@ -199,19 +185,16 @@
                 font-size: var(--size-font-footer);
                 color: var(--color-font-text);
             }
-
             .panel-page-container {
                 position: relative;
                 width: 100%;
             }
-
             hr.section-divider {
                 flex-grow: 1;
                 border: none;
                 border-top: 1px solid var(--color-divider-border);
                 margin: 12px 0;
             }
-
             #minimizePanelButton {
                 width: 28px;
                 height: 28px;
@@ -225,7 +208,6 @@
                 cursor: pointer;
                 box-sizing: content-box;
             }
-
             .lock-icon {
                 width: 28px;
                 height: 28px;
@@ -233,7 +215,6 @@
                 border-radius: 50%;
                 fill: var(--color-svg-fill);
             }
-
             .lock-icon-animation {
                 position: absolute;
                 top: 0;
@@ -244,36 +225,30 @@
                 transition: opacity 0.4s ease, transform 0.4s ease;
                 transform: rotate(0deg);
             }
-
             .lock-icon-animation.active {
                 opacity: 1;
                 transform: rotate(360deg);
             }
-
             #lockIconContainer {
                 position: relative;
                 width: 28px;
                 height: 28px;
             }
-
             #arrowIcon {
                 width: 28px;
                 height: 28px;
                 fill: var(--color-svg-fill);
                 transition: transform 0.3s ease;
             }
-
             .heart-icon {
                 width: 10px;
                 height: 10px;
                 vertical-align: middle;
                 fill: var(--color-svg-fill);
             }
-
             .heart-icon:hover {
                 fill: var(--color-svg-fill-heart-hover);
             }
-
             #countBubble {
                 background-color: var(--color-bubble);
                 color: var(--color-font-text);
@@ -284,24 +259,20 @@
                 min-width: 20px;
                 text-align: center;
             }
-
             .switch {
                 position: relative;
                 display: inline-block;
                 width: 42px;
                 height: 22px;
             }
-
             .switch input {
                 opacity: 0;
                 width: 0;
                 height: 0;
             }
-
             .switch-label {
                 margin-right: 10px;
             }
-
             .slider {
                 position: absolute;
                 cursor: pointer;
@@ -313,7 +284,6 @@
                 transition: 0.3s;
                 border-radius: 34px;
             }
-
             .slider:before {
                 position: absolute;
                 content: "";
@@ -325,47 +295,37 @@
                 transition: 0.3s;
                 border-radius: 50%;
             }
-
             input:checked + .slider {
                 background-color: var(--color-switch-on);
             }
-
             input:checked + .slider:before {
                 transform: translateX(20px);
             }
-
             #creatorPage {
                 color: var(--color-font-text);
                 transition: color 0.3s ease;
             }
-
             #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover{
                 color: var(--color-font-link-hover);
             }
-
             .error-page {
                 text-align: center;
                 font-size: var(--size-font-body-error);
             }
-
             .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
                 color: var(--color-font-text);
             }
-
             .outbound-status-page:visited, .outbound-update-page:visited {
                 color: var(--color-font-link-visited);
             }
-
             .sponsored-highlight {
             border: var(--thickness-highlight-border) solid var(--color-highlight-border) !important;
             background-color: var(--color-highlight-background);
             }
-
             .sponsored-hidden {
                 display: none !important;
             }
-
             .sponsored-hidden-banner {
             display: none !important;
             }
@@ -423,7 +383,6 @@
     async function buildPanel() {
         const wrapper = document.createElement("div");
         wrapper.id = "panelWrapper";
-
         const box = document.createElement("div");
         box.id = "panelBox";
 
@@ -477,7 +436,6 @@
     function buildPanelHeader() {
         const header = document.createElement("div");
         header.id = "panelHeader";
-
         header.innerHTML = `
             <div id="lockIconContainer">
                 ${APP_ICONS.locked}
@@ -579,7 +537,7 @@
 
         const outboundUpdatePage = document.createElement("a");
         outboundUpdatePage.textContent = "Update";
-        outboundUpdatePage.href = "https://greasyfork.org/en/scripts/541981";
+        outboundUpdatePage.href = "https://greasyfork.org/en/scripts/541981-spotless-for-ebay";
         outboundUpdatePage.target = "_blank";
         outboundUpdatePage.rel = "noopener noreferrer";
         outboundUpdatePage.classList.add("outbound-update-page");
@@ -617,7 +575,6 @@
 
     function hideShowPanel() {
         const panelBox = document.getElementById("panelBox");
-
         if (!panelBox) return;
         const isSearchPage = validateCurrentURL();
         if (isSearchPage) {
@@ -720,7 +677,6 @@
     function detectSponsoredListingBySeparatorSize() {
         const listings = getListingElements();
         const sponsoredListings = [];
-
         listings.forEach(listing => {
             const separatorSpan = listing.querySelector('span.s-item__sep');
 
@@ -762,7 +718,6 @@
         const containers = Array.from(document.querySelectorAll('div[role="text"]')).filter(container => {
             return container.querySelector('div[aria-hidden="true"]');
         });
-
         containers.forEach(container => {
             const targetDiv = container.querySelector('div[aria-hidden="true"]');
             if (!targetDiv) return;
@@ -805,13 +760,33 @@
                 const banners = Array.from(
                     document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
                 ).filter((el) => el.offsetHeight >= 140);
-
                 banners.forEach(banner => {
                     banner.classList.add("sponsored-hidden-banner");
                 });
                 resolve(banners);
-            }, 525);
+            }, 600);
         });
+    }
+
+    function detectSponsoredRibbon() {
+        const breadcrumb = document.querySelector('.x-breadcrumb');
+        if (breadcrumb) {
+            breadcrumb.remove();
+        }
+        const placements = document.querySelector('.x-pda-placements');
+        if (placements) {
+            placements.remove();
+        }
+        const ribbon = document.querySelector('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
+        const whitelistMatch = ['statusmessage', 'x-alert'];
+        const hasWhitelistedClass = ribbon && Array.from(ribbon.classList).some(cls =>
+            whitelistMatch.some(pattern => cls.includes(pattern))
+        );
+        if (ribbon && !hasWhitelistedClass) {
+            ribbon.style.minHeight = '48px';
+            ribbon.style.maxHeight = '100px';
+            ribbon.remove();
+        }
     }
 
     async function processSponsoredContent() {
@@ -848,6 +823,7 @@
                         hideShowSponsoredContent(el, hidingEnabled);
                     }
                 }
+                detectSponsoredRibbon();
                 cleanListingURLS();
                 cleanGeneralURLs();
                 hideShowPanel();
@@ -906,7 +882,6 @@
 
     function cleanListingURLS() {
         const listingURLMatch = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/;
-
         const links = document.querySelectorAll("a[href*='/itm/']");
         links.forEach((link) => {
             const match = link.href.match(listingURLMatch);
@@ -923,7 +898,6 @@
 
     function cleanGeneralURLs() {
         const links = document.querySelectorAll("a[href*='ebay.']");
-
         links.forEach((link) => {
             try {
                 const url = new URL(link.href);
