@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.6.0
+// @version      1.6.1
 // @description  Highlights, hides, and cleans sponsored eBay listings
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -356,7 +356,6 @@
 
     function observeURLMutation() {
         let lastUrl = location.href;
-
         const observeURL = () => {
             const currentUrl = location.href;
             if (currentUrl !== lastUrl) {
@@ -754,6 +753,51 @@
         };
     }
 
+    function detectSponsoredByAriaGroup() {
+        function generateAriaGroupLabel(num) {
+            let letters = '';
+            do {
+                letters = String.fromCharCode(65 + (num % 26)) + letters;
+                num = Math.floor(num / 26) - 1;
+            } while (num >= 0);
+            return letters;
+        }
+
+        const listings = getListingElements();
+        const groupMap = {};
+        const ariaLabelToGroup = {};
+        let groupCounter = 0;
+
+        listings.forEach(listing => {
+            const labelSpan = listing.querySelector('span[aria-labelledby]');
+            if (!labelSpan) return;
+
+            const ariaLabel = labelSpan.getAttribute('aria-labelledby');
+            if (!ariaLabel || !ariaLabel.includes("s-")) return;
+
+            if (!ariaLabelToGroup[ariaLabel]) {
+                ariaLabelToGroup[ariaLabel] = `Group ${generateAriaGroupLabel(groupCounter)}`;
+                groupCounter++;
+            }
+            const group = ariaLabelToGroup[ariaLabel];
+            if (!groupMap[group]) {
+                groupMap[group] = [];
+            }
+            groupMap[group].push(listing);
+        });
+
+        let sponsoredGroup = null;
+        let minCount = Infinity;
+
+        for (const [group, listings] of Object.entries(groupMap)) {
+            if (listings.length < minCount) {
+                sponsoredGroup = group;
+                minCount = listings.length;
+            }
+        }
+        return sponsoredGroup ? groupMap[sponsoredGroup] : [];
+    }
+
     function detectSponsoredBanner() {
         return new Promise((resolve) => {
             setTimeout(() => {
@@ -814,6 +858,10 @@
                     const li = container.closest("li");
                     if (li) detectedSponsoredElements.add(li);
                 });
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const ariaGroupResults = detectSponsoredByAriaGroup();
+                ariaGroupResults.forEach(li => detectedSponsoredElements.add(li));
             }
             requestAnimationFrame(() => {
                 for (const el of detectedSponsoredElements) {

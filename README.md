@@ -3,7 +3,7 @@
 
 <div align="center">
 
-  ![Version](https://img.shields.io/badge/Version-v1.6.0-blue?style=flat-square) 
-  ![Status](https://img.shields.io/badge/Status-Down-red?style=flat-square)
+  ![Version](https://img.shields.io/badge/Version-v1.6.1-blue?style=flat-square) 
+  ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 
 </div>
