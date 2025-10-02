@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.6.1
-// @description  Highlights, hides, and cleans sponsored eBay listings
+// @version      1.7.0
+// @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0
 // @homepageURL  https://github.com/OsborneLabs/Spotless
@@ -38,15 +38,7 @@
     const APP_NAME = "Spotless";
     const APP_NAME_DEBUG = "SPOTLESS FOR EBAY";
     const APP_KEY_SPONSORED_CONTENT = "hideSponsoredContent";
-
-    let hidingEnabled = localStorage.getItem(APP_KEY_SPONSORED_CONTENT);
-    hidingEnabled = hidingEnabled !== "false";
-    let highlightedSponsoredContent = [];
-
-    let isProcessing = false;
-    let updateScheduled = false;
-    let observerInitialized = false;
-
+    const APP_PARAMETERS_BLOCK = ["campaign", "promoted_items", "source", "sr"];
     const APP_ICONS = {
         locked: `
             <svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -66,23 +58,21 @@
             </svg>`
     };
 
-    const APP_BLOCK_PARAMETERS = ["campaign", "promoted_items", "source", "sr"];
+    let hidingEnabled = localStorage.getItem(APP_KEY_SPONSORED_CONTENT);
+    hidingEnabled = hidingEnabled !== "false";
 
-    async function init() {
-        observeURLMutation();
-        createStyles();
-        buildPanel();
-        hideShowPanel();
-        await processSponsoredContent();
-    }
+    let highlightedSponsoredContent = [];
+    let isProcessing = false;
+    let updateScheduled = false;
+    let observerInitialized = false;
 
     function createStyles() {
         const style = document.createElement("style");
         style.textContent = `
             :root {
-                --size-font-title: 18px;
+                --size-font-title: 20px;
                 --size-font-body: 14px;
-                --size-font-body-error: 16px;
+                --size-font-body-error: 17px;
                 --size-font-footer: 12px;
                 --color-font-text: white;
                 --color-font-link-hover: lightblue;
@@ -108,7 +98,7 @@
                 position: fixed;
                 bottom: 10px;
                 right: 5px;
-                z-index: 2147483647;
+                z-index: 9999;
                 width: 100%;
                 max-width: 320px;
                 padding: 0 16px;
@@ -116,6 +106,7 @@
             }
             @media (max-width: 768px) {
                 #panelWrapper {
+                    position: fixed;
                     bottom: 5px;
                     left: 50%;
                     transform: translateX(-50%);
@@ -177,7 +168,7 @@
                 margin-top: 5px;
             }
             .panel-footer {
-                height: 15px;
+                height: 14px;
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
@@ -305,12 +296,13 @@
                 color: var(--color-font-text);
                 transition: color 0.3s ease;
             }
-            #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover{
+            #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover {
                 color: var(--color-font-link-hover);
             }
             .error-page {
                 text-align: center;
                 font-size: var(--size-font-body-error);
+                padding: 5px 0 5px 0;
             }
             .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
@@ -320,17 +312,29 @@
                 color: var(--color-font-link-visited);
             }
             .sponsored-highlight {
-            border: var(--thickness-highlight-border) solid var(--color-highlight-border) !important;
-            background-color: var(--color-highlight-background);
+                border: var(--thickness-highlight-border) solid var(--color-highlight-border) !important;
+                background-color: var(--color-highlight-background);
             }
             .sponsored-hidden {
                 display: none !important;
             }
             .sponsored-hidden-banner {
-            display: none !important;
+                display: none !important;
             }
         `;
         document.head.appendChild(style);
+    }
+
+    function cleanListingObserver() {
+        const urlCleanListingObserver = new MutationObserver(() => {
+            cleanListingURLS();
+        });
+        urlCleanListingObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['href'],
+        });
     }
 
     function initializeObserver() {
@@ -345,12 +349,10 @@
     function validateCurrentURL() {
         const url = new URL(location.href);
         const params = url.searchParams;
-
         const isSearchPage = /^https:\/\/www\.ebay\.[a-z.]+\/sch\//i.test(url.href);
         const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
         const isSellerPage = params.has("_ssn");
         const isSoldPage = params.get("LH_Sold") === "1";
-
         return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isSoldPage;
     }
 
@@ -377,6 +379,14 @@
         window.addEventListener("popstate", observeURL);
         window.addEventListener("hashchange", observeURL);
         setInterval(observeURL, 1000);
+    }
+
+    async function init() {
+        observeURLMutation();
+        createStyles();
+        buildPanel();
+        hideShowPanel();
+        await processSponsoredContent();
     }
 
     async function buildPanel() {
@@ -531,7 +541,7 @@
         errorPage.classList.add("error-page", "panel-page");
 
         const errorMessage = document.createElement("p");
-        errorMessage.textContent = "No sponsored content found";
+        errorMessage.textContent = "Nothing sponsored found";
         errorMessage.appendChild(document.createElement("br"));
 
         const outboundUpdatePage = document.createElement("a");
@@ -551,7 +561,6 @@
         errorMessage.appendChild(outboundUpdatePage);
         errorMessage.appendChild(document.createTextNode(" or "));
         errorMessage.appendChild(outboundStatusPage);
-
         errorPage.appendChild(errorMessage);
         return errorPage;
     }
@@ -583,13 +592,6 @@
         }
     }
 
-    function determinePanelState(sponsoredCount) {
-        if (sponsoredCount < 2 || sponsoredCount > 20) {
-            return buildPanelErrorPage();
-        }
-        return buildPanelHomePage();
-    }
-
     function updateLockIcon() {
         const locked = document.getElementById("lockedIcon");
         const unlocked = document.getElementById("unlockedIcon");
@@ -597,7 +599,18 @@
         unlocked.classList.toggle("active", !hidingEnabled);
     }
 
-    function detectSponsoredListingBySVG(batchSize = 5) {
+    function determinePanelState(sponsoredCount) {
+        if (!validateSponsoredCount(sponsoredCount)) {
+            return buildPanelErrorPage();
+        }
+        return buildPanelHomePage();
+    }
+
+    function validateSponsoredCount(count) {
+        return count >= 2 && count <= 20;
+    }
+
+    function detectSponsoredListingBySVG(batchSize = 10) {
         return new Promise((resolve) => {
             const listings = getListingElements();
             const sponsoredElements = [];
@@ -612,7 +625,6 @@
                     resolve(sponsoredElements);
                     return;
                 }
-
                 batch.forEach((listing) => {
                     const svgImage = listing.querySelector(".s-item__sep span[aria-hidden='true']");
                     if (!svgImage) return done();
@@ -634,16 +646,24 @@
                         canvas.height = img.naturalHeight || 20;
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
                         const colors = new Set();
-                        for (let i = 0; i < imageData.length; i += 4) {
-                            const r = imageData[i];
-                            const g = imageData[i + 1];
-                            const b = imageData[i + 2];
-                            const a = imageData[i + 3];
-                            if (a > 0) {
-                                colors.add(`${r},${g},${b}`);
+
+                        const sampleWidth = 15;
+                        const sampleHeight = 15;
+
+                        for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
+                            for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
+                                const i = (y * canvas.width + x) * 4;
+                                const r = imageData[i];
+                                const g = imageData[i + 1];
+                                const b = imageData[i + 2];
+                                const a = imageData[i + 3];
+                                if (a > 0) {
+                                    colors.add(`${r},${g},${b}`);
+                                    if (colors.size > 1) break;
+                                }
                             }
+                            if (colors.size > 1) break;
                         }
                         if (colors.size > 1) {
                             sponsoredElements.push(listing);
@@ -671,26 +691,6 @@
                 processBatch();
             }
         });
-    }
-
-    function detectSponsoredListingBySeparatorSize() {
-        const listings = getListingElements();
-        const sponsoredListings = [];
-        listings.forEach(listing => {
-            const separatorSpan = listing.querySelector('span.s-item__sep');
-
-            if (!separatorSpan) return;
-            const innerSpan = separatorSpan.querySelector('span');
-
-            const width = innerSpan?.offsetWidth || 0;
-            const height = innerSpan?.offsetHeight || 0;
-            const isSponsored = width > 0 && height > 0;
-
-            if (isSponsored) {
-                sponsoredListings.push(listing);
-            }
-        });
-        return sponsoredListings;
     }
 
     function detectSponsoredListingByInvertStyle() {
@@ -741,16 +741,42 @@
         const groupEntries = Object.entries(sponsoredGroups);
         if (groupEntries.length === 0) {
             return {
+                invert: null,
+                elements: [],
                 allGroups: []
             };
         }
+
         const sortedGroups = groupEntries.sort((a, b) => a[1].length - b[1].length);
         const [sponsoredInvert, sponsoredList] = sortedGroups[0];
+
+        const sponsoredElements = sponsoredList
+            .map(container => container.closest("li"))
+            .filter(Boolean);
         return {
             invert: parseFloat(sponsoredInvert),
-            elements: sponsoredList,
+            elements: sponsoredElements,
             allGroups: groupEntries
         };
+    }
+
+    function detectSponsoredListingBySeparatorSize() {
+        const listings = getListingElements();
+        const sponsoredListings = [];
+        listings.forEach(listing => {
+            const separatorSpan = listing.querySelector('span.s-item__sep');
+
+            if (!separatorSpan) return;
+            const innerSpan = separatorSpan.querySelector('span');
+
+            const width = innerSpan?.offsetWidth || 0;
+            const height = innerSpan?.offsetHeight || 0;
+            const isSponsored = width > 0 && height > 0;
+            if (isSponsored) {
+                sponsoredListings.push(listing);
+            }
+        });
+        return sponsoredListings;
     }
 
     function detectSponsoredByAriaGroup() {
@@ -771,10 +797,8 @@
         listings.forEach(listing => {
             const labelSpan = listing.querySelector('span[aria-labelledby]');
             if (!labelSpan) return;
-
             const ariaLabel = labelSpan.getAttribute('aria-labelledby');
             if (!ariaLabel || !ariaLabel.includes("s-")) return;
-
             if (!ariaLabelToGroup[ariaLabel]) {
                 ariaLabelToGroup[ariaLabel] = `Group ${generateAriaGroupLabel(groupCounter)}`;
                 groupCounter++;
@@ -849,36 +873,35 @@
                 if (li) detectedSponsoredElements.add(li);
             });
             if (detectedSponsoredElements.size === 0) {
-                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
-                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
+                const invertMethod = detectSponsoredListingByInvertStyle();
+                invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
-                const invertMethod = detectSponsoredListingByInvertStyle();
-                invertMethod.elements?.forEach(container => {
-                    const li = container.closest("li");
-                    if (li) detectedSponsoredElements.add(li);
-                });
+                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
+                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
                 const ariaGroupResults = detectSponsoredByAriaGroup();
                 ariaGroupResults.forEach(li => detectedSponsoredElements.add(li));
             }
             requestAnimationFrame(() => {
-                for (const el of detectedSponsoredElements) {
-                    if (!el.hasAttribute("data-sponsored-processed")) {
-                        designateSponsoredContent(el);
-                        highlightSponsoredContent(el);
-                        hideShowSponsoredContent(el, hidingEnabled);
+                const count = detectedSponsoredElements.size;
+                const sponsoredDetectionSucceeded = validateSponsoredCount(count);
+                if (sponsoredDetectionSucceeded) {
+                    for (const el of detectedSponsoredElements) {
+                        if (!el.hasAttribute("data-sponsored-processed")) {
+                            designateSponsoredContent(el);
+                            highlightSponsoredContent(el);
+                            hideShowSponsoredContent(el, hidingEnabled);
+                        }
                     }
                 }
                 detectSponsoredRibbon();
                 cleanListingURLS();
                 cleanGeneralURLs();
+                cleanGeneralClutter();
                 hideShowPanel();
-
-                const count = detectedSponsoredElements.size;
                 countSponsoredContent(count);
-
                 initializeObserver();
                 isProcessing = false;
             });
@@ -954,7 +977,7 @@
 
                 const params = new URLSearchParams(url.search);
 
-                APP_BLOCK_PARAMETERS.forEach(param => {
+                APP_PARAMETERS_BLOCK.forEach(param => {
                     if (params.has(param)) {
                         params.delete(param);
                     }
@@ -972,6 +995,20 @@
         });
     }
 
+    function cleanGeneralClutter() {
+        document.querySelectorAll('[class*="EBAY_LIVE_ENTRY"]').forEach(div => {
+            if (div.querySelector('.section-notice')) {
+                div.remove();
+            }
+        });
+        const clutter = ['.madrona-banner', '.s-feedback', '.s-faq-list'];
+        clutter.forEach(selector => {
+            document.querySelectorAll(selector).forEach(el => {
+                el.remove();
+            });
+        });
+    }
+
     function scheduleHighlightUpdate() {
         if (updateScheduled || isProcessing) return;
         updateScheduled = true;
@@ -979,18 +1016,6 @@
             processSponsoredContent().finally(() => {
                 updateScheduled = false;
             });
-        });
-    }
-
-    function cleanListingObserver() {
-        const urlCleanListingObserver = new MutationObserver(() => {
-            cleanListingURLS();
-        });
-        urlCleanListingObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['href'],
         });
     }
 
