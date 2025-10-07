@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.7.0
+// @version      1.8.0
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0
 // @homepageURL  https://github.com/OsborneLabs/Spotless
-// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNDcwLjYgNTEyIiB4bWw6c3BhY2U9InByZXNlcnZlIj4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxLjQwNjU5MzQwNjU5MzQwMTYgMS40MDY1OTM0MDY1OTM0MDE2KSBzY2FsZSgyLjgxIDIuODEpIj4KICAgIDxwYXRoIGZpbGw9IiM4NDg0ODQiIGQ9Ik0xMjcuOCw0Ni4xSDM4LjdWNDJjMC0yMy40LDE5LjEtNDIuNSw0Mi41LTQyLjVoNC4xYzIzLjQsMCw0Mi41LDE5LjEsNDIuNSw0Mi41VjQ2LjF6IE00Mi43LDQyaDgxVjQyIGMwLTIxLjItMTcuMi0zOC40LTM4LjQtMzguNGgtNC4xQzYwLDMuNSw0Mi43LDIwLjgsNDIuNyw0Mkw0Mi43LDQyeiI+PC9wYXRoPgogICAgPHBhdGggZmlsbD0iI0U1MzIzOCIgZD0iTTM1LjEsMTgxLjdoLTkuNmMtMTQuMywwLTI1LjktMTEuNi0yNS45LTI1LjlWNDkuNGMwLTUuMiw0LjMtOS41LDkuNS05LjVoMjYuMUwzNS4xLDE4MS43TDM1LjEsMTgxLjd6Ij48L3BhdGg+CiAgICA8cmVjdCB4PSIzNS4xIiB5PSIzOS45IiBmaWxsPSIjMDA2NEQyIiB3aWR0aD0iNDguMSIgaGVpZ2h0PSIxNDEuOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iODMuMiIgeT0iMzkuOSIgZmlsbD0iI0Y1QUYwMiIgd2lkdGg9IjQ4LjEiIGhlaWdodD0iMTQxLjgiPjwvcmVjdD4KICAgIDxwYXRoIGZpbGw9IiM4NkI4MTciIGQ9Ik0xNDEsMTgxLjdoLTkuNlYzOS45aDI2LjFjNS4yLDAsOS41LDQuMyw5LjUsOS41djEwNi40QzE2NywxNzAuMSwxNTUuMywxODEuNywxNDEsMTgxLjd6Ij48L3BhdGg+CiAgPC9nPgo8L3N2Zz4K
+// @icon         data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBoZWlnaHQ9IjI1MDAiIHdpZHRoPSIyMDcyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAuMzU5IDIxLjY4ODgwMTQ3Nzg4Njg0IDI1MS4yODE5OTk5OTk5OTk5OCAyODIuMzExMTk4NTIyMTEzMTYiPjxwYXRoIGQ9Ik0xNTIuMzM4IDE1Ny4xM2E3MC4zMjcgNzAuMzI3IDAgMSAwLTUzLjggMS42NjJsNi43ODgtMTcuOTM3YTUxLjE0OSA1MS4xNDkgMCAxIDEgMzkuMTI4LTEuMjA5eiIgZmlsbD0iIzQxNDE0MSIvPjxwYXRoIGQ9Ik0uMzU5IDk4LjQwNWg1Ny4xMVYzMDRoLTM5LjExYy05Ljk0MSAwLTE4LTguMDU5LTE4LTE4eiIgZmlsbD0iI2VhMzIzYyIvPjxwYXRoIGQ9Ik0yNTEuNjQxIDk4LjQwNWgtNTcuMTA5VjMwNGgzOS4xMDljOS45NDEgMCAxOC04LjA1OSAxOC0xOHoiIGZpbGw9IiM4OGI2MjEiLz48cGF0aCBkPSJNMTk0LjUzMSA5OC40MDVIMTI2VjMwNGg2OC41MzF6IiBmaWxsPSIjZjVhZTAzIi8+PHBhdGggZD0iTTEyNiA5OC40MDVINTcuNDY4VjMwNEgxMjZ6IiBmaWxsPSIjMDA2NGQxIi8+PC9zdmc+
 // @match        https://www.ebay.com/*
 // @match        https://www.ebay.at/*
 // @match        https://www.ebay.ca/*
@@ -37,8 +37,8 @@
 
     const APP_NAME = "Spotless";
     const APP_NAME_DEBUG = "SPOTLESS FOR EBAY";
-    const APP_KEY_SPONSORED_CONTENT = "hideSponsoredContent";
-    const APP_PARAMETERS_BLOCK = ["campaign", "promoted_items", "source", "sr"];
+    const APP_KEY_OBSTRUCT_SPONSORED = "hideSponsoredContent";
+    const APP_PARAM_OBSTRUCT_KEYS = ["campaign", "promoted_items", "source", "sr"];
     const APP_ICONS = {
         locked: `
             <svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -58,13 +58,16 @@
             </svg>`
     };
 
-    let hidingEnabled = localStorage.getItem(APP_KEY_SPONSORED_CONTENT);
-    hidingEnabled = hidingEnabled !== "false";
-
-    let highlightedSponsoredContent = [];
-    let isProcessing = false;
-    let updateScheduled = false;
-    let observerInitialized = false;
+    const state = {
+        hidingEnabled: localStorage.getItem(APP_KEY_OBSTRUCT_SPONSORED) !== "false",
+        highlightedSponsoredContent: [],
+        isContentProcessing: false,
+        updateScheduled: false,
+        scrollListenerStopped: false,
+        carouselTimeoutReached: false,
+        carouselTimeoutId: null,
+        observerInitialized: false
+    };
 
     function createStyles() {
         const style = document.createElement("style");
@@ -81,14 +84,14 @@
                 --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 --color-row: rgba(20, 30, 45, 0.5);
                 --color-divider-border: rgba(255, 255, 255, 0.1);
-                --color-bubble: #e74c3c;
-                --color-highlight-background: #ffe6e6;
+                --color-bubble: #E74C3C;
+                --color-highlight-background: #FFE6E6;
                 --color-highlight-border: red;
                 --color-svg-fill: white;
                 --color-svg-fill-heart-hover: red;
                 --color-switch-knob: white;
                 --color-switch-on: #2AA866;
-                --color-switch-off: #ccc;
+                --color-switch-off: #CCC;
                 --thickness-highlight-border: 2px;
             }
             #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
@@ -312,7 +315,7 @@
                 color: var(--color-font-link-visited);
             }
             .sponsored-highlight {
-                border: var(--thickness-highlight-border) solid var(--color-highlight-border) !important;
+                border: var(--thickness-highlight-border) dashed var(--color-highlight-border) !important;
                 background-color: var(--color-highlight-background);
             }
             .sponsored-hidden {
@@ -321,32 +324,25 @@
             .sponsored-hidden-banner {
                 display: none !important;
             }
+            .sponsored-hidden-carousel {
+                display: none !important;
+            }
         `;
         document.head.appendChild(style);
     }
 
-    function cleanListingObserver() {
-        const urlCleanListingObserver = new MutationObserver(() => {
-            cleanListingURLS();
-        });
-        urlCleanListingObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['href'],
-        });
+    async function init() {
+        observeURLMutation();
+        createStyles();
+        buildPanel();
+        hideOrShowPanel();
+        if (isListingPage()) {
+            startCarouselDetection();
+        }
+        await processSponsoredContent();
     }
 
-    function initializeObserver() {
-        if (observerInitialized) return;
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-        });
-        observerInitialized = true;
-    }
-
-    function validateCurrentURL() {
+    function validateCurrentPage() {
         const url = new URL(location.href);
         const params = url.searchParams;
         const isSearchPage = /^https:\/\/www\.ebay\.[a-z.]+\/sch\//i.test(url.href);
@@ -356,13 +352,26 @@
         return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isSoldPage;
     }
 
+    function isListingPage() {
+        return /^https:\/\/www\.ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
+    }
+
+    function initializeObserver() {
+        if (state.observerInitialized) return;
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+        state.observerInitialized = true;
+    }
+
     function observeURLMutation() {
-        let lastUrl = location.href;
+        let previousURL = location.href;
         const observeURL = () => {
-            const currentUrl = location.href;
-            if (currentUrl !== lastUrl) {
-                lastUrl = currentUrl;
-                hideShowPanel();
+            const currentURL = location.href;
+            if (currentURL !== previousURL) {
+                previousURL = currentURL;
+                hideOrShowPanel();
                 scheduleHighlightUpdate();
             }
         };
@@ -381,12 +390,16 @@
         setInterval(observeURL, 1000);
     }
 
-    async function init() {
-        observeURLMutation();
-        createStyles();
-        buildPanel();
-        hideShowPanel();
-        await processSponsoredContent();
+    function cleanListingObserver() {
+        const observer = new MutationObserver(() => {
+            cleanListingURLs();
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['href'],
+        });
     }
 
     async function buildPanel() {
@@ -397,7 +410,7 @@
 
         const header = buildPanelHeader();
         const sponsoredCount = await processSponsoredContent();
-        const body = determinePanelState(sponsoredCount, hidingEnabled);
+        const body = determinePanelState(sponsoredCount, state.hidingEnabled);
         const footer = buildPanelFooter();
 
         const topDivider = document.createElement("hr");
@@ -416,11 +429,9 @@
 
         const minimizePanelButton = document.getElementById("minimizePanelButton");
         minimizePanelButton.addEventListener("click", () => {
-
             const panelBox = document.getElementById("panelBox");
             const isCurrentlyMinimized = panelBox.classList.contains("minimized");
             const newState = !isCurrentlyMinimized;
-
             localStorage.setItem("panelMinimized", newState);
             minimizePanel(newState);
         });
@@ -434,8 +445,8 @@
             return;
         }
         toggleSponsoredContentSwitchInput.addEventListener("change", (e) => {
-            hidingEnabled = e.target.checked;
-            localStorage.setItem(APP_KEY_SPONSORED_CONTENT, hidingEnabled);
+            state.hidingEnabled = e.target.checked;
+            localStorage.setItem(APP_KEY_OBSTRUCT_SPONSORED, state.hidingEnabled);
             updateLockIcon();
             scheduleHighlightUpdate();
         });
@@ -459,9 +470,6 @@
     }
 
     function buildPanelFooter() {
-        const footer = document.createElement("div");
-        footer.className = "panel-footer";
-
         const creatorPage = document.createElement("a");
         creatorPage.href = "https://github.com/OsborneLabs/Spotless";
         creatorPage.target = "_blank";
@@ -482,6 +490,9 @@
         donatePage.style.alignItems = "center";
         donatePage.style.justifyContent = "center";
 
+        const footer = document.createElement("div");
+        footer.className = "panel-footer";
+
         footer.appendChild(creatorPage);
         footer.appendChild(separator);
         footer.appendChild(donatePage);
@@ -495,20 +506,20 @@
         return row;
     }
 
-    function buildCountSponsoredContentRow() {
+    function buildSponsoredCountRow() {
         const row = buildPanelRow(`
-            <span>Content found</span>
+            <span>Sponsored items</span>
             <span id="countBubble">0</span>
         `);
         row.id = "countSponsoredContentRow";
         return row;
     }
 
-    function buildToggleSponsoredContentRow() {
+    function buildSponsoredToggleRow() {
         const row = buildPanelRow(`
-            <span class="switch-label">Hide sponsored content</span>
-            <label class="switch" aria-label="Toggles the visibility of sponsored content">
-                <input type="checkbox" id="toggleSponsoredContentSwitch" ${hidingEnabled ? "checked" : ""}>
+            <span class="switch-label">Hide all sponsored</span>
+            <label class="switch" aria-label="Toggles the visibility of sponsored items">
+                <input type="checkbox" id="toggleSponsoredContentSwitch" ${state.hidingEnabled ? "checked" : ""}>
                 <span class="slider"></span>
             </label>
         `);
@@ -526,12 +537,11 @@
         homePage.className = "panel-page";
         homePage.style.display = "block";
 
-        const countSponsoredContentRow = buildCountSponsoredContentRow();
-        const toggleSponsoredContentRow = buildToggleSponsoredContentRow();
+        const countSponsoredContentRow = buildSponsoredCountRow();
+        const toggleSponsoredContentRow = buildSponsoredToggleRow();
 
         homePage.appendChild(countSponsoredContentRow);
         homePage.appendChild(toggleSponsoredContentRow);
-
         pageContainer.appendChild(homePage);
         return pageContainer;
     }
@@ -565,6 +575,17 @@
         return errorPage;
     }
 
+    function hideOrShowPanel() {
+        const panelBox = document.getElementById("panelBox");
+        if (!panelBox) return;
+        const isSearchPage = validateCurrentPage();
+        if (isSearchPage) {
+            panelBox.classList.add("show");
+        } else {
+            panelBox.classList.remove("show");
+        }
+    }
+
     function minimizePanel(minimized) {
         const panelBox = document.getElementById("panelBox");
         if (!panelBox) return;
@@ -581,22 +602,11 @@
         if (panelFooter) panelFooter.style.display = minimized ? "none" : "";
     }
 
-    function hideShowPanel() {
-        const panelBox = document.getElementById("panelBox");
-        if (!panelBox) return;
-        const isSearchPage = validateCurrentURL();
-        if (isSearchPage) {
-            panelBox.classList.add("show");
-        } else {
-            panelBox.classList.remove("show");
-        }
-    }
-
     function updateLockIcon() {
         const locked = document.getElementById("lockedIcon");
         const unlocked = document.getElementById("unlockedIcon");
-        locked.classList.toggle("active", hidingEnabled);
-        unlocked.classList.toggle("active", !hidingEnabled);
+        locked.classList.toggle("active", state.hidingEnabled);
+        unlocked.classList.toggle("active", !state.hidingEnabled);
     }
 
     function determinePanelState(sponsoredCount) {
@@ -606,8 +616,74 @@
         return buildPanelHomePage();
     }
 
+    async function processSponsoredContent() {
+        if (state.isContentProcessing) return 0;
+        state.isContentProcessing = true;
+
+        try {
+            observer.disconnect();
+            resetSponsoredContent();
+            const detectedSponsoredElements = new Set();
+            const base64Results = await detectSponsoredListingBySVG();
+            base64Results.forEach(el => {
+                const li = el.closest("li");
+                if (li) detectedSponsoredElements.add(li);
+            });
+            if (detectedSponsoredElements.size === 0) {
+                const invertMethod = detectSponsoredListingByInvertStyle();
+                invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
+                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const ariaGroupResults = detectSponsoredListingByAriaGroup();
+                ariaGroupResults.forEach(li => detectedSponsoredElements.add(li));
+            }
+            requestAnimationFrame(() => {
+                const count = detectedSponsoredElements.size;
+                const sponsoredDetectionSucceeded = validateSponsoredCount(count);
+                if (sponsoredDetectionSucceeded) {
+                    for (const el of detectedSponsoredElements) {
+                        if (!el.hasAttribute("data-sponsored-processed")) {
+                            designateSponsoredContent(el);
+                            highlightSponsoredContent(el);
+                            hideShowSponsoredContent(el, state.hidingEnabled);
+                        }
+                    }
+                }
+                removeSponsoredRibbons();
+                cleanListingURLs();
+                cleanGeneralURLs();
+                cleanGeneralClutter();
+                hideOrShowPanel();
+                countSponsoredContent(count);
+                initializeObserver();
+                state.isContentProcessing = false;
+            });
+            return detectedSponsoredElements.size;
+        } catch (err) {
+            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
+            state.isContentProcessing = false;
+            initializeObserver();
+            return 0;
+        }
+    }
+
     function validateSponsoredCount(count) {
         return count >= 2 && count <= 20;
+    }
+
+    function countSponsoredContent(count) {
+        const countBubble = document.getElementById("countBubble");
+        if (countBubble) countBubble.textContent = count;
+    }
+
+    function getListingElements() {
+        return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
+            (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
+        );
     }
 
     function detectSponsoredListingBySVG(batchSize = 10) {
@@ -638,9 +714,7 @@
                     const img = new Image();
                     const canvas = document.createElement("canvas");
                     const ctx = canvas.getContext("2d");
-
                     img.src = "data:image/svg+xml;base64," + btoa(svgString);
-
                     img.onload = () => {
                         canvas.width = img.naturalWidth || 20;
                         canvas.height = img.naturalHeight || 20;
@@ -746,10 +820,8 @@
                 allGroups: []
             };
         }
-
         const sortedGroups = groupEntries.sort((a, b) => a[1].length - b[1].length);
         const [sponsoredInvert, sponsoredList] = sortedGroups[0];
-
         const sponsoredElements = sponsoredList
             .map(container => container.closest("li"))
             .filter(Boolean);
@@ -765,10 +837,8 @@
         const sponsoredListings = [];
         listings.forEach(listing => {
             const separatorSpan = listing.querySelector('span.s-item__sep');
-
             if (!separatorSpan) return;
             const innerSpan = separatorSpan.querySelector('span');
-
             const width = innerSpan?.offsetWidth || 0;
             const height = innerSpan?.offsetHeight || 0;
             const isSponsored = width > 0 && height > 0;
@@ -779,7 +849,7 @@
         return sponsoredListings;
     }
 
-    function detectSponsoredByAriaGroup() {
+    function detectSponsoredListingByAriaGroup() {
         function generateAriaGroupLabel(num) {
             let letters = '';
             do {
@@ -788,12 +858,10 @@
             } while (num >= 0);
             return letters;
         }
-
         const listings = getListingElements();
         const groupMap = {};
         const ariaLabelToGroup = {};
         let groupCounter = 0;
-
         listings.forEach(listing => {
             const labelSpan = listing.querySelector('span[aria-labelledby]');
             if (!labelSpan) return;
@@ -809,10 +877,8 @@
             }
             groupMap[group].push(listing);
         });
-
         let sponsoredGroup = null;
         let minCount = Infinity;
-
         for (const [group, listings] of Object.entries(groupMap)) {
             if (listings.length < minCount) {
                 sponsoredGroup = group;
@@ -822,7 +888,7 @@
         return sponsoredGroup ? groupMap[sponsoredGroup] : [];
     }
 
-    function detectSponsoredBanner() {
+    function removeSponsoredBanners() {
         return new Promise((resolve) => {
             setTimeout(() => {
                 const banners = Array.from(
@@ -836,7 +902,7 @@
         });
     }
 
-    function detectSponsoredRibbon() {
+    function removeSponsoredRibbons() {
         const breadcrumb = document.querySelector('.x-breadcrumb');
         if (breadcrumb) {
             breadcrumb.remove();
@@ -845,90 +911,70 @@
         if (placements) {
             placements.remove();
         }
-        const ribbon = document.querySelector('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
-        const whitelistMatch = ['statusmessage', 'x-alert'];
-        const hasWhitelistedClass = ribbon && Array.from(ribbon.classList).some(cls =>
-            whitelistMatch.some(pattern => cls.includes(pattern))
+        const ribbons = document.querySelector('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
+        const whitelisted = ['statusmessage', 'x-alert'];
+        const isWhitelisted = ribbons && Array.from(ribbons.classList).some(cls =>
+            whitelisted.some(pattern => cls.includes(pattern))
         );
-        if (ribbon && !hasWhitelistedClass) {
-            ribbon.style.minHeight = '48px';
-            ribbon.style.maxHeight = '100px';
-            ribbon.remove();
+        if (ribbons && !isWhitelisted) {
+            ribbons.style.minHeight = '48px';
+            ribbons.style.maxHeight = '100px';
+            ribbons.remove();
         }
     }
 
-    async function processSponsoredContent() {
-        if (isProcessing) return 0;
-        isProcessing = true;
-
-        try {
-            observer.disconnect();
-            resetDesignateSponsoredContent();
-
-            const detectedSponsoredElements = new Set();
-
-            const base64Results = await detectSponsoredListingBySVG();
-            base64Results.forEach(el => {
-                const li = el.closest("li");
-                if (li) detectedSponsoredElements.add(li);
+    function removeSponsoredCarousels() {
+        if (state.scrollListenerStopped || state.carouselTimeoutReached) return;
+        if (!isListingPage()) {
+            stopCarouselDetection();
+            return;
+        }
+        const carouselsExpected = 2;
+        let sponsoredCarouselCount = 0;
+        const carouselMatch = ['s', 'p', 'o', 'n', 's', 'o', 'r', 'e', 'd'];
+        const carousels = document.querySelectorAll('[data-viewport]');
+        carousels.forEach(carousel => {
+            if (carousel.classList.contains('sponsored-hidden-carousel')) return;
+            const elements = carousel.querySelectorAll('div, span');
+            let characters = [];
+            elements.forEach(element => {
+                const textContent = element.textContent.trim();
+                if (textContent.length === 1 && /^[a-zA-Z]$/.test(textContent)) {
+                    characters.push(textContent.toLowerCase());
+                }
             });
-            if (detectedSponsoredElements.size === 0) {
-                const invertMethod = detectSponsoredListingByInvertStyle();
-                invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
-                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
-                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
-                const ariaGroupResults = detectSponsoredByAriaGroup();
-                ariaGroupResults.forEach(li => detectedSponsoredElements.add(li));
-            }
-            requestAnimationFrame(() => {
-                const count = detectedSponsoredElements.size;
-                const sponsoredDetectionSucceeded = validateSponsoredCount(count);
-                if (sponsoredDetectionSucceeded) {
-                    for (const el of detectedSponsoredElements) {
-                        if (!el.hasAttribute("data-sponsored-processed")) {
-                            designateSponsoredContent(el);
-                            highlightSponsoredContent(el);
-                            hideShowSponsoredContent(el, hidingEnabled);
+            let matchIndex = 0;
+            for (let char of characters) {
+                if (char === carouselMatch[matchIndex]) {
+                    matchIndex++;
+                    if (matchIndex === carouselMatch.length) {
+                        carousel.classList.add('sponsored-hidden-carousel');
+                        sponsoredCarouselCount++;
+                        if (sponsoredCarouselCount >= carouselsExpected) {
+                            stopCarouselDetection();
                         }
+                        break;
                     }
                 }
-                detectSponsoredRibbon();
-                cleanListingURLS();
-                cleanGeneralURLs();
-                cleanGeneralClutter();
-                hideShowPanel();
-                countSponsoredContent(count);
-                initializeObserver();
-                isProcessing = false;
-            });
-            return detectedSponsoredElements.size;
-        } catch (err) {
-            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
-            isProcessing = false;
-            initializeObserver();
-            return 0;
-        }
+            }
+        });
     }
 
     function designateSponsoredContent(el) {
         el.setAttribute("data-sponsored", "true");
         el.setAttribute("data-sponsored-processed", "true");
-        highlightedSponsoredContent.push(el);
+        state.highlightedSponsoredContent.push(el);
     }
 
-    function resetDesignateSponsoredContent() {
-        highlightedSponsoredContent.forEach(el => {
+    function resetSponsoredContent() {
+        state.highlightedSponsoredContent.forEach(el => {
             el.classList.remove("sponsored-hidden");
             el.removeAttribute("data-sponsored");
             el.removeAttribute("data-sponsored-processed");
             el.style.border = "";
             el.style.backgroundColor = "";
         });
-        highlightedSponsoredContent.length = 0;
+        state.highlightedSponsoredContent.length = 0;
     }
 
     function highlightSponsoredContent(element) {
@@ -940,28 +986,17 @@
         element.classList.toggle("sponsored-hidden", hide);
     }
 
-    function countSponsoredContent(count) {
-        const countBubble = document.getElementById("countBubble");
-        if (countBubble) countBubble.textContent = count;
-    }
-
-    function getListingElements() {
-        return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
-            (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
-        );
-    }
-
-    function cleanListingURLS() {
-        const listingURLMatch = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/;
+    function cleanListingURLs() {
+        const url = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/;
         const links = document.querySelectorAll("a[href*='/itm/']");
         links.forEach((link) => {
-            const match = link.href.match(listingURLMatch);
+            const match = link.href.match(url);
             if (match) {
                 const tld = match[1];
                 const itemId = match[2];
-                const cleanUrl = `https://www.ebay.${tld}/itm/${itemId}`;
-                if (link.href !== cleanUrl) {
-                    link.href = cleanUrl;
+                const cleanURL = `https://www.ebay.${tld}/itm/${itemId}`;
+                if (link.href !== cleanURL) {
+                    link.href = cleanURL;
                 }
             }
         });
@@ -974,10 +1009,8 @@
                 const url = new URL(link.href);
                 const tldMatch = url.hostname.match(/(?:^|\.)ebay\.([a-z.]+)$/);
                 if (!tldMatch) return;
-
                 const params = new URLSearchParams(url.search);
-
-                APP_PARAMETERS_BLOCK.forEach(param => {
+                APP_PARAM_OBSTRUCT_KEYS.forEach(param => {
                     if (params.has(param)) {
                         params.delete(param);
                     }
@@ -987,20 +1020,21 @@
                         params.delete(key);
                     }
                 }
-                const cleanUrl = `${url.origin}${url.pathname}${params.toString() ? '?' + params.toString() : ''}${url.hash}`;
-                if (link.href !== cleanUrl) {
-                    link.href = cleanUrl;
+                const cleanURL = `${url.origin}${url.pathname}${params.toString() ? '?' + params.toString() : ''}${url.hash}`;
+                if (link.href !== cleanURL) {
+                    link.href = cleanURL;
                 }
             } catch (e) {}
         });
     }
 
     function cleanGeneralClutter() {
-        document.querySelectorAll('[class*="EBAY_LIVE_ENTRY"]').forEach(div => {
-            if (div.querySelector('.section-notice')) {
-                div.remove();
-            }
-        });
+        const removeBySubstring = (substring) => {
+            document.querySelectorAll(`[class*="${substring}"]`).forEach(el => {
+                el.remove();
+            });
+        };
+        ['EBAY_LIVE_ENTRY', 'FAQ_KW_SRP_MODULE'].forEach(substring => removeBySubstring(substring));
         const clutter = ['.madrona-banner', '.s-feedback', '.s-faq-list'];
         clutter.forEach(selector => {
             document.querySelectorAll(selector).forEach(el => {
@@ -1010,17 +1044,44 @@
     }
 
     function scheduleHighlightUpdate() {
-        if (updateScheduled || isProcessing) return;
-        updateScheduled = true;
+        if (state.updateScheduled || state.isContentProcessing) return;
+        state.updateScheduled = true;
         requestAnimationFrame(() => {
             processSponsoredContent().finally(() => {
-                updateScheduled = false;
+                state.updateScheduled = false;
             });
         });
     }
 
+    function startCarouselDetection() {
+        if (state.scrollListenerStopped) return;
+        window.addEventListener('scroll', removeSponsoredCarousels, {
+            passive: true
+        });
+        scheduleCarouselTimeout();
+    }
+
+    function scheduleCarouselTimeout(seconds = 600) {
+        const ms = seconds * 1000;
+        state.carouselTimeoutId = setTimeout(() => {
+            if (state.scrollListenerStopped) return;
+            state.carouselTimeoutReached = true;
+            stopCarouselDetection();
+        }, ms);
+    }
+
+    function stopCarouselDetection() {
+        if (state.scrollListenerStopped) return;
+        state.scrollListenerStopped = true;
+        window.removeEventListener('scroll', removeSponsoredCarousels);
+        if (state.carouselTimeoutId !== null) {
+            clearTimeout(state.carouselTimeoutId);
+            state.carouselTimeoutId = null;
+        }
+    }
+
     const observer = new MutationObserver(() => {
-        hideShowPanel();
+        hideOrShowPanel();
         scheduleHighlightUpdate();
     });
 
@@ -1030,26 +1091,15 @@
         cleanListingObserver();
     }
 
-    (async function() {
-        const delayedInit = async () => {
-            await new Promise(r => setTimeout(r, 200));
-            init();
-            detectSponsoredBanner();
-        };
-        if (document.readyState === "complete" || document.readyState === "interactive") {
-            await delayedInit();
-        } else {
-            window.addEventListener("DOMContentLoaded", delayedInit);
-        }
-    })();
-
     window.addEventListener("storage", (event) => {
-        if (event.key === APP_KEY_SPONSORED_CONTENT) {
+        if (event.key === APP_KEY_OBSTRUCT_SPONSORED) {
             const newValue = event.newValue === "true";
-            if (newValue !== hidingEnabled) {
-                hidingEnabled = newValue;
-                const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
-                if (toggleSponsoredContentSwitchInput) toggleSponsoredContentSwitchInput.checked = hidingEnabled;
+            if (newValue !== state.hidingEnabled) {
+                state.hidingEnabled = newValue;
+
+                const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
+                if (toggleInput) toggleInput.checked = state.hidingEnabled;
+
                 updateLockIcon();
                 scheduleHighlightUpdate();
             }
@@ -1057,4 +1107,17 @@
             minimizePanel(event.newValue === "true");
         }
     });
+
+    const delayedInit = async () => {
+        await new Promise(r => setTimeout(r, 200));
+        init();
+        removeSponsoredBanners();
+    };
+
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        delayedInit();
+    } else {
+        window.addEventListener("DOMContentLoaded", delayedInit);
+    }
+
 })();
