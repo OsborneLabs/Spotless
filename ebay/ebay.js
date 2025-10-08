@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.0
+// @version      1.8.1
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -423,7 +423,6 @@
         box.appendChild(body);
         box.appendChild(bottomDivider);
         box.appendChild(footer);
-
         wrapper.appendChild(box);
         document.body.appendChild(wrapper);
 
@@ -435,10 +434,8 @@
             localStorage.setItem("panelMinimized", newState);
             minimizePanel(newState);
         });
-
         const isPanelMinimized = localStorage.getItem("panelMinimized") === "true";
         minimizePanel(isPanelMinimized);
-
         const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
         if (!toggleSponsoredContentSwitchInput) {
             updateLockIcon();
@@ -492,7 +489,6 @@
 
         const footer = document.createElement("div");
         footer.className = "panel-footer";
-
         footer.appendChild(creatorPage);
         footer.appendChild(separator);
         footer.appendChild(donatePage);
@@ -769,10 +765,8 @@
 
     function detectSponsoredListingByInvertStyle() {
         const invertStyleMatch = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
-
         const sponsoredGroups = {};
         const classToInvertMap = {};
-
         const styleTags = Array.from(document.querySelectorAll("style"));
         styleTags.forEach(styleTag => {
             const css = styleTag.textContent;
@@ -794,18 +788,14 @@
         containers.forEach(container => {
             const targetDiv = container.querySelector('div[aria-hidden="true"]');
             if (!targetDiv) return;
-
             const ancestorDiv = container.closest("div[class*='_']");
             if (!ancestorDiv) return;
-
             const classList = Array.from(ancestorDiv.classList);
             const dynamicClass = classList.find(cls => classToInvertMap[cls]);
             if (!dynamicClass) return;
-
             const candidates = classToInvertMap[dynamicClass];
             const invertEntry = candidates?.[0];
             if (!invertEntry) return;
-
             const key = invertEntry.invert;
             if (!sponsoredGroups[key]) {
                 sponsoredGroups[key] = [];
@@ -929,35 +919,66 @@
             stopCarouselDetection();
             return;
         }
-        const carouselsExpected = 2;
+        const carouselsExpected = 3;
         let sponsoredCarouselCount = 0;
-        const carouselMatch = ['s', 'p', 'o', 'n', 's', 'o', 'r', 'e', 'd'];
+        const sponsoredKeywords = [
+            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'e', 'd'],
+            ['a', 'n', 'z', 'e', 'i', 'g', 'e'],
+            ['g', 'e', 's', 'p', 'o', 'n', 's', 'o', 'r', 'd'],
+            ['p', 'a', 't', 'r', 'o', 'c', 'i', 'n', 'a', 'd', 'o'],
+            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'i', 's', 'é'],
+            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'i', 'z', 'z', 'a', 't', 'o'],
+            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'o', 'w', 'a', 'n', 'e'],
+            ['助', '贊']
+        ];
+        const sponsoredWords = sponsoredKeywords.map(chars => chars.join(''));
+        const labelSponsored = (carousel) => {
+            carousel.classList.add('sponsored-hidden-carousel');
+            sponsoredCarouselCount++;
+            if (sponsoredCarouselCount >= carouselsExpected) {
+                stopCarouselDetection();
+            }
+        };
         const carousels = document.querySelectorAll('[data-viewport]');
-        carousels.forEach(carousel => {
-            if (carousel.classList.contains('sponsored-hidden-carousel')) return;
-            const elements = carousel.querySelectorAll('div, span');
-            let characters = [];
-            elements.forEach(element => {
-                const textContent = element.textContent.trim();
-                if (textContent.length === 1 && /^[a-zA-Z]$/.test(textContent)) {
-                    characters.push(textContent.toLowerCase());
-                }
-            });
-            let matchIndex = 0;
-            for (let char of characters) {
-                if (char === carouselMatch[matchIndex]) {
-                    matchIndex++;
-                    if (matchIndex === carouselMatch.length) {
-                        carousel.classList.add('sponsored-hidden-carousel');
-                        sponsoredCarouselCount++;
-                        if (sponsoredCarouselCount >= carouselsExpected) {
-                            stopCarouselDetection();
-                        }
-                        break;
-                    }
+        for (const carousel of carousels) {
+            if (carousel.classList.contains('sponsored-hidden-carousel')) continue;
+            const titleElement = carousel.querySelector('h2, h3, h4');
+            if (titleElement) {
+                const titleText = titleElement.textContent.trim()
+                    .normalize("NFKC")
+                    .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '')
+                    .toLowerCase();
+
+                if (sponsoredWords.some(word => titleText.includes(word))) {
+                    labelSponsored(carousel);
+                    continue;
                 }
             }
-        });
+            const elements = carousel.querySelectorAll('div, span');
+            const characters = [];
+            for (const el of elements) {
+                const text = el.textContent.trim()
+                    .normalize("NFKC")
+                    .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '');
+
+                if (text.length === 1 && /^\p{L}$/u.test(text)) {
+                    characters.push(text.toLowerCase());
+                }
+            }
+            for (const keyword of sponsoredKeywords) {
+                let matchIndex = 0;
+                for (const char of characters) {
+                    if (char === keyword[matchIndex]) {
+                        matchIndex++;
+                        if (matchIndex === keyword.length) {
+                            labelSponsored(carousel);
+                            break;
+                        }
+                    }
+                }
+                if (matchIndex === keyword.length) break;
+            }
+        }
     }
 
     function designateSponsoredContent(el) {
@@ -1084,7 +1105,6 @@
         hideOrShowPanel();
         scheduleHighlightUpdate();
     });
-
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', cleanListingObserver);
     } else {
@@ -1096,10 +1116,8 @@
             const newValue = event.newValue === "true";
             if (newValue !== state.hidingEnabled) {
                 state.hidingEnabled = newValue;
-
                 const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
                 if (toggleInput) toggleInput.checked = state.hidingEnabled;
-
                 updateLockIcon();
                 scheduleHighlightUpdate();
             }
@@ -1113,7 +1131,6 @@
         init();
         removeSponsoredBanners();
     };
-
     if (document.readyState === "complete" || document.readyState === "interactive") {
         delayedInit();
     } else {
