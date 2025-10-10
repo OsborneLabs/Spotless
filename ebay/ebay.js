@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.2
+// @version      1.8.3
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -412,7 +412,6 @@
         const sponsoredCount = await processSponsoredContent();
         const body = determinePanelState(sponsoredCount, state.hidingEnabled);
         const footer = buildPanelFooter();
-
         const topDivider = document.createElement("hr");
         topDivider.className = "section-divider";
         const bottomDivider = document.createElement("hr");
@@ -922,8 +921,9 @@
         const carouselsExpected = 3;
         let sponsoredCarouselCount = 0;
         const sponsoredKeywords = new Set([
-            'sponsored', 'anzeige', 'gesponsert', 'patrocina', 'sponsorizé', 'sponsorizzato', 'sponsorowane', '助贊'
+            'sponsored', 'anzeige', 'gesponsert', 'patrocina', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
         ]);
+        const sponsoredKeywordsArray = [...sponsoredKeywords];
         const normalizeText = (text) => {
             return text.trim()
                 .normalize("NFKC")
@@ -943,7 +943,7 @@
             const titleElement = carousel.querySelector('h2, h3, h4');
             if (titleElement) {
                 const titleText = normalizeText(titleElement.textContent);
-                if (sponsoredKeywords.has(titleText) || [...sponsoredKeywords].some(keyword => titleText.includes(keyword))) {
+                if (sponsoredKeywordsArray.some(keyword => titleText.includes(keyword))) {
                     labelSponsored(carousel);
                     continue;
                 }
@@ -951,10 +951,27 @@
             const elements = carousel.querySelectorAll('div, span');
             for (const el of elements) {
                 const text = normalizeText(el.textContent);
-                if ([...sponsoredKeywords].some(keyword => text.includes(keyword))) {
+                if (sponsoredKeywordsArray.some(keyword => text.includes(keyword))) {
                     labelSponsored(carousel);
                     break;
                 }
+            }
+            const characterElements = Array.from(carousel.querySelectorAll('span'));
+            const characters = characterElements
+                .map(el => normalizeText(el.textContent))
+                .filter(text => text.length === 1 && /^\p{L}$/u.test(text));
+            for (const keyword of sponsoredKeywordsArray) {
+                let matchIndex = 0;
+                for (const char of characters) {
+                    if (char === keyword[matchIndex]) {
+                        matchIndex++;
+                        if (matchIndex === keyword.length) {
+                            labelSponsored(carousel);
+                            break;
+                        }
+                    }
+                }
+                if (matchIndex === keyword.length) break;
             }
         }
     }
