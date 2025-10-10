@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.1
+// @version      1.8.2
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0
@@ -921,17 +921,15 @@
         }
         const carouselsExpected = 3;
         let sponsoredCarouselCount = 0;
-        const sponsoredKeywords = [
-            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'e', 'd'],
-            ['a', 'n', 'z', 'e', 'i', 'g', 'e'],
-            ['g', 'e', 's', 'p', 'o', 'n', 's', 'o', 'r', 'd'],
-            ['p', 'a', 't', 'r', 'o', 'c', 'i', 'n', 'a', 'd', 'o'],
-            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'i', 's', 'é'],
-            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'i', 'z', 'z', 'a', 't', 'o'],
-            ['s', 'p', 'o', 'n', 's', 'o', 'r', 'o', 'w', 'a', 'n', 'e'],
-            ['助', '贊']
-        ];
-        const sponsoredWords = sponsoredKeywords.map(chars => chars.join(''));
+        const sponsoredKeywords = new Set([
+            'sponsored', 'anzeige', 'gesponsert', 'patrocina', 'sponsorizé', 'sponsorizzato', 'sponsorowane', '助贊'
+        ]);
+        const normalizeText = (text) => {
+            return text.trim()
+                .normalize("NFKC")
+                .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '')
+                .toLowerCase();
+        };
         const labelSponsored = (carousel) => {
             carousel.classList.add('sponsored-hidden-carousel');
             sponsoredCarouselCount++;
@@ -944,39 +942,19 @@
             if (carousel.classList.contains('sponsored-hidden-carousel')) continue;
             const titleElement = carousel.querySelector('h2, h3, h4');
             if (titleElement) {
-                const titleText = titleElement.textContent.trim()
-                    .normalize("NFKC")
-                    .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '')
-                    .toLowerCase();
-
-                if (sponsoredWords.some(word => titleText.includes(word))) {
+                const titleText = normalizeText(titleElement.textContent);
+                if (sponsoredKeywords.has(titleText) || [...sponsoredKeywords].some(keyword => titleText.includes(keyword))) {
                     labelSponsored(carousel);
                     continue;
                 }
             }
             const elements = carousel.querySelectorAll('div, span');
-            const characters = [];
             for (const el of elements) {
-                const text = el.textContent.trim()
-                    .normalize("NFKC")
-                    .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '');
-
-                if (text.length === 1 && /^\p{L}$/u.test(text)) {
-                    characters.push(text.toLowerCase());
+                const text = normalizeText(el.textContent);
+                if ([...sponsoredKeywords].some(keyword => text.includes(keyword))) {
+                    labelSponsored(carousel);
+                    break;
                 }
-            }
-            for (const keyword of sponsoredKeywords) {
-                let matchIndex = 0;
-                for (const char of characters) {
-                    if (char === keyword[matchIndex]) {
-                        matchIndex++;
-                        if (matchIndex === keyword.length) {
-                            labelSponsored(carousel);
-                            break;
-                        }
-                    }
-                }
-                if (matchIndex === keyword.length) break;
             }
         }
     }
