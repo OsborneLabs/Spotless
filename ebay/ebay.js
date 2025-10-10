@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.3
+// @version      1.8.4
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
-// @license      GPL-3.0
+// @license      GPL-3.0-only
 // @homepageURL  https://github.com/OsborneLabs/Spotless
 // @icon         data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBoZWlnaHQ9IjI1MDAiIHdpZHRoPSIyMDcyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAuMzU5IDIxLjY4ODgwMTQ3Nzg4Njg0IDI1MS4yODE5OTk5OTk5OTk5OCAyODIuMzExMTk4NTIyMTEzMTYiPjxwYXRoIGQ9Ik0xNTIuMzM4IDE1Ny4xM2E3MC4zMjcgNzAuMzI3IDAgMSAwLTUzLjggMS42NjJsNi43ODgtMTcuOTM3YTUxLjE0OSA1MS4xNDkgMCAxIDEgMzkuMTI4LTEuMjA5eiIgZmlsbD0iIzQxNDE0MSIvPjxwYXRoIGQ9Ik0uMzU5IDk4LjQwNWg1Ny4xMVYzMDRoLTM5LjExYy05Ljk0MSAwLTE4LTguMDU5LTE4LTE4eiIgZmlsbD0iI2VhMzIzYyIvPjxwYXRoIGQ9Ik0yNTEuNjQxIDk4LjQwNWgtNTcuMTA5VjMwNGgzOS4xMDljOS45NDEgMCAxOC04LjA1OSAxOC0xOHoiIGZpbGw9IiM4OGI2MjEiLz48cGF0aCBkPSJNMTk0LjUzMSA5OC40MDVIMTI2VjMwNGg2OC41MzF6IiBmaWxsPSIjZjVhZTAzIi8+PHBhdGggZD0iTTEyNiA5OC40MDVINTcuNDY4VjMwNEgxMjZ6IiBmaWxsPSIjMDA2NGQxIi8+PC9zdmc+
 // @match        https://www.ebay.com/*
@@ -921,7 +921,7 @@
         const carouselsExpected = 3;
         let sponsoredCarouselCount = 0;
         const sponsoredKeywords = new Set([
-            'sponsored', 'anzeige', 'gesponsert', 'patrocina', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
+            'sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
         ]);
         const sponsoredKeywordsArray = [...sponsoredKeywords];
         const normalizeText = (text) => {
