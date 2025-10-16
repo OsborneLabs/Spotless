@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.4
+// @version      1.8.5
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -348,8 +348,9 @@
         const isSearchPage = /^https:\/\/www\.ebay\.[a-z.]+\/sch\//i.test(url.href);
         const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
         const isSellerPage = params.has("_ssn");
+        const isCompletedPage = params.get("LH_Complete") === "1";
         const isSoldPage = params.get("LH_Sold") === "1";
-        return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isSoldPage;
+        return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isCompletedPage && !isSoldPage;
     }
 
     function isListingPage() {
@@ -666,8 +667,12 @@
         }
     }
 
-    function validateSponsoredCount(count) {
-        return count >= 2 && count <= 20;
+    function validateSponsoredCount(sponsoredCount) {
+        const listingCount = getListingElements().length;
+        if (listingCount === 0) return false;
+        const maxPercent = 0.5;
+        const sponsoredPercent = sponsoredCount / listingCount;
+        return sponsoredCount >= 2 && sponsoredPercent <= maxPercent;
     }
 
     function countSponsoredContent(count) {
@@ -716,10 +721,8 @@
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
                         const colors = new Set();
-
                         const sampleWidth = 15;
                         const sampleHeight = 15;
-
                         for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
                             for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
                                 const i = (y * canvas.width + x) * 4;
