@@ -1,28 +1,29 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.8.5
+// @version      1.9.0
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
 // @homepageURL  https://github.com/OsborneLabs/Spotless
 // @icon         data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBoZWlnaHQ9IjI1MDAiIHdpZHRoPSIyMDcyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAuMzU5IDIxLjY4ODgwMTQ3Nzg4Njg0IDI1MS4yODE5OTk5OTk5OTk5OCAyODIuMzExMTk4NTIyMTEzMTYiPjxwYXRoIGQ9Ik0xNTIuMzM4IDE1Ny4xM2E3MC4zMjcgNzAuMzI3IDAgMSAwLTUzLjggMS42NjJsNi43ODgtMTcuOTM3YTUxLjE0OSA1MS4xNDkgMCAxIDEgMzkuMTI4LTEuMjA5eiIgZmlsbD0iIzQxNDE0MSIvPjxwYXRoIGQ9Ik0uMzU5IDk4LjQwNWg1Ny4xMVYzMDRoLTM5LjExYy05Ljk0MSAwLTE4LTguMDU5LTE4LTE4eiIgZmlsbD0iI2VhMzIzYyIvPjxwYXRoIGQ9Ik0yNTEuNjQxIDk4LjQwNWgtNTcuMTA5VjMwNGgzOS4xMDljOS45NDEgMCAxOC04LjA1OSAxOC0xOHoiIGZpbGw9IiM4OGI2MjEiLz48cGF0aCBkPSJNMTk0LjUzMSA5OC40MDVIMTI2VjMwNGg2OC41MzF6IiBmaWxsPSIjZjVhZTAzIi8+PHBhdGggZD0iTTEyNiA5OC40MDVINTcuNDY4VjMwNEgxMjZ6IiBmaWxsPSIjMDA2NGQxIi8+PC9zdmc+
-// @match        https://www.ebay.com/*
-// @match        https://www.ebay.at/*
-// @match        https://www.ebay.ca/*
-// @match        https://www.ebay.ch/*
-// @match        https://www.ebay.com.au/*
-// @match        https://www.ebay.com.hk/*
-// @match        https://www.ebay.com.my/*
-// @match        https://www.ebay.com.sg/*
-// @match        https://www.ebay.co.uk/*
-// @match        https://www.ebay.de/*
-// @match        https://www.ebay.es/*
-// @match        https://www.ebay.fr/*
-// @match        https://www.ebay.ie/*
-// @match        https://www.ebay.it/*
-// @match        https://www.ebay.nl/*
-// @match        https://www.ebay.pl/*
+// @match        https://*.ebay.com/*
+// @match        https://*.ebay.at/*
+// @match        https://*.ebay.be/*
+// @match        https://*.ebay.ca/*
+// @match        https://*.ebay.ch/*
+// @match        https://*.ebay.com.au/*
+// @match        https://*.ebay.com.hk/*
+// @match        https://*.ebay.com.my/*
+// @match        https://*.ebay.com.sg/*
+// @match        https://*.ebay.co.uk/*
+// @match        https://*.ebay.de/*
+// @match        https://*.ebay.es/*
+// @match        https://*.ebay.fr/*
+// @match        https://*.ebay.ie/*
+// @match        https://*.ebay.it/*
+// @match        https://*.ebay.nl/*
+// @match        https://*.ebay.pl/*
 // @run-at       document-start
 // @supportURL   https://github.com/OsborneLabs/Spotless/issues
 // @downloadURL  https://update.greasyfork.org/scripts/541981/Spotless%20for%20eBay.user.js
@@ -38,7 +39,6 @@
     const APP_NAME = "Spotless";
     const APP_NAME_DEBUG = "SPOTLESS FOR EBAY";
     const APP_KEY_OBSTRUCT_SPONSORED = "hideSponsoredContent";
-    const APP_PARAM_OBSTRUCT_KEYS = ["campaign", "promoted_items", "source", "sr"];
     const APP_ICONS = {
         locked: `
             <svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -59,40 +59,45 @@
     };
 
     const state = {
-        hidingEnabled: localStorage.getItem(APP_KEY_OBSTRUCT_SPONSORED) !== "false",
-        highlightedSponsoredContent: [],
-        isContentProcessing: false,
-        updateScheduled: false,
-        scrollListenerStopped: false,
-        carouselTimeoutReached: false,
-        carouselTimeoutId: null,
-        observerInitialized: false
+        ui: {
+            hidingEnabled: localStorage.getItem(APP_KEY_OBSTRUCT_SPONSORED) !== "false",
+            highlightedSponsoredContent: [],
+            isContentProcessing: false,
+            updateScheduled: false,
+            observerInitialized: false
+        },
+        carousel: {
+            carouselDetectionStopped: false,
+            carouselObserver: null,
+            carouselObserverInitialized: false,
+            carouselObserverTimeoutId: null
+        }
     };
 
     function createStyles() {
         const style = document.createElement("style");
         style.textContent = `
             :root {
-                --size-font-title: 20px;
-                --size-font-body: 14px;
-                --size-font-body-error: 17px;
-                --size-font-footer: 12px;
-                --color-font-text: white;
-                --color-font-link-hover: lightblue;
-                --color-font-link-visited: lightblue;
-                --color-panel: rgba(34, 50, 70, 0.85);
+                --color-app-bubble: #E74C3C;
+                --color-app-icon-heart-hover: red;
+                --color-app-icon: white;
+                --color-app-switch-off: #CCC;
+                --color-app-switch-on: #2AA866;
+                --color-app-switch-thumb: white;
+                --color-highlight-background: rgba(255, 230, 230, 0.45);
+                --color-highlight-border: #D95C5C;
+                --color-panel-divider: rgba(255, 255, 255, 0.1);
+                --color-panel-row: rgba(20, 30, 45, 0.5);
                 --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-                --color-row: rgba(20, 30, 45, 0.5);
-                --color-divider-border: rgba(255, 255, 255, 0.1);
-                --color-bubble: #E74C3C;
-                --color-highlight-background: #FFE6E6;
-                --color-highlight-border: red;
-                --color-svg-fill: white;
-                --color-svg-fill-heart-hover: red;
-                --color-switch-knob: white;
-                --color-switch-on: #2AA866;
-                --color-switch-off: #CCC;
-                --thickness-highlight-border: 2px;
+                --color-panel: rgba(34, 50, 70, 0.85);
+                --color-text-link-hover: lightblue;
+                --color-text-link-visited: var(--color-text-link-hover);
+                --color-text-normal: white;
+                --size-text-body-error: 17px;
+                --size-text-body-normal: 14px;
+                --size-text-footer: 12px;
+                --size-text-header-title: 20px;
+                --size-thickness-highlight-border: 2px;
             }
             #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
                 box-sizing: border-box;
@@ -127,7 +132,7 @@
                 gap: 0px;
                 background: var(--color-panel);
                 backdrop-filter: blur(10px);
-                color: var(--color-font-text);
+                color: var(--color-text-normal);
                 padding: 16px;
                 border-radius: 12px;
                 width: 100%;
@@ -151,18 +156,18 @@
                 gap: 8px;
             }
             #panelHeader h2.panel-title {
-                font-size: var(--size-font-title);
+                font-size: var(--size-text-header-title);
                 font-weight: 600;
                 margin: 0;
-                color: var(--color-font-text);
+                color: var(--color-text-normal);
             }
             .panel-body-row {
                 margin: 0;
-                font-size: var(--size-font-body);
+                font-size: var(--size-text-body-normal);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                background: var(--color-row);
+                background: var(--color-panel-row);
                 backdrop-filter: blur(12px);
                 padding: 12px 16px;
                 border-radius: 8px;
@@ -176,8 +181,8 @@
                 align-items: center;
                 justify-content: flex-end;
                 gap: 6px;
-                font-size: var(--size-font-footer);
-                color: var(--color-font-text);
+                font-size: var(--size-text-footer);
+                color: var(--color-text-normal);
             }
             .panel-page-container {
                 position: relative;
@@ -186,7 +191,7 @@
             hr.section-divider {
                 flex-grow: 1;
                 border: none;
-                border-top: 1px solid var(--color-divider-border);
+                border-top: 1px solid var(--color-panel-divider);
                 margin: 12px 0;
             }
             #minimizePanelButton {
@@ -207,7 +212,7 @@
                 height: 28px;
                 padding: 4px;
                 border-radius: 50%;
-                fill: var(--color-svg-fill);
+                fill: var(--color-app-icon);
             }
             .lock-icon-animation {
                 position: absolute;
@@ -231,21 +236,21 @@
             #arrowIcon {
                 width: 28px;
                 height: 28px;
-                fill: var(--color-svg-fill);
+                fill: var(--color-app-icon);
                 transition: transform 0.3s ease;
             }
             .heart-icon {
                 width: 10px;
                 height: 10px;
                 vertical-align: middle;
-                fill: var(--color-svg-fill);
+                fill: var(--color-app-icon);
             }
             .heart-icon:hover {
-                fill: var(--color-svg-fill-heart-hover);
+                fill: var(--color-app-icon-heart-hover);
             }
             #countBubble {
-                background-color: var(--color-bubble);
-                color: var(--color-font-text);
+                background-color: var(--color-app-bubble);
+                color: var(--color-text-normal);
                 font-size: 12px;
                 font-weight: bold;
                 padding: 3px 8px;
@@ -274,7 +279,7 @@
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background-color: var(--color-switch-off);
+                background-color: var(--color-app-switch-off);
                 transition: 0.3s;
                 border-radius: 34px;
             }
@@ -285,37 +290,37 @@
                 width: 18px;
                 top: 2px;
                 left: 2px;
-                background-color: var(--color-switch-knob);
+                background-color: var(--color-app-switch-thumb);
                 transition: 0.3s;
                 border-radius: 50%;
             }
             input:checked + .slider {
-                background-color: var(--color-switch-on);
+                background-color: var(--color-app-switch-on);
             }
             input:checked + .slider:before {
                 transform: translateX(20px);
             }
             #creatorPage {
-                color: var(--color-font-text);
+                color: var(--color-text-normal);
                 transition: color 0.3s ease;
             }
             #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover {
-                color: var(--color-font-link-hover);
+                color: var(--color-text-link-hover);
             }
             .error-page {
                 text-align: center;
-                font-size: var(--size-font-body-error);
+                font-size: var(--size-text-body-error);
                 padding: 5px 0 5px 0;
             }
             .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
-                color: var(--color-font-text);
+                color: var(--color-text-normal);
             }
             .outbound-status-page:visited, .outbound-update-page:visited {
-                color: var(--color-font-link-visited);
+                color: var(--color-text-link-visited);
             }
             .sponsored-highlight {
-                border: var(--thickness-highlight-border) dashed var(--color-highlight-border) !important;
+                border: var(--size-thickness-highlight-border) dashed var(--color-highlight-border) !important;
                 background-color: var(--color-highlight-background);
             }
             .sponsored-hidden {
@@ -337,61 +342,45 @@
         buildPanel();
         hideOrShowPanel();
         if (isListingPage()) {
-            startCarouselDetection();
+            removeSponsoredCarousels();
+            initCarouselObserver();
         }
         await processSponsoredContent();
     }
 
-    function validateCurrentPage() {
-        const url = new URL(location.href);
-        const params = url.searchParams;
-        const isSearchPage = /^https:\/\/www\.ebay\.[a-z.]+\/sch\//i.test(url.href);
-        const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
-        const isSellerPage = params.has("_ssn");
-        const isCompletedPage = params.get("LH_Complete") === "1";
-        const isSoldPage = params.get("LH_Sold") === "1";
-        return isSearchPage && !isAdvancedSearchPage && !isSellerPage && !isCompletedPage && !isSoldPage;
-    }
-
-    function isListingPage() {
-        return /^https:\/\/www\.ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
-    }
-
-    function initializeObserver() {
-        if (state.observerInitialized) return;
+    function initObserver() {
+        if (state.ui.observerInitialized) return;
         observer.observe(document.body, {
             childList: true,
             subtree: true,
         });
-        state.observerInitialized = true;
+        state.ui.observerInitialized = true;
     }
 
-    function observeURLMutation() {
-        let previousURL = location.href;
-        const observeURL = () => {
-            const currentURL = location.href;
-            if (currentURL !== previousURL) {
-                previousURL = currentURL;
-                hideOrShowPanel();
-                scheduleHighlightUpdate();
+    function initCarouselObserver() {
+        const carouselState = state.carousel;
+        if (carouselState.carouselObserverInitialized) return;
+        carouselState.carouselObserverInitialized = true;
+        const observer = new MutationObserver(() => {
+            if (!carouselState.carouselDetectionStopped) {
+                if (carouselState.carouselObserverTimeoutId) {
+                    clearTimeout(carouselState.carouselObserverTimeoutId);
+                }
+                carouselState.carouselObserverTimeoutId = setTimeout(() => {
+                    removeSponsoredCarousels();
+                }, 300);
             }
-        };
-        const pushState = history.pushState;
-        history.pushState = function() {
-            pushState.apply(history, arguments);
-            observeURL();
-        };
-        const replaceState = history.replaceState;
-        history.replaceState = function() {
-            replaceState.apply(history, arguments);
-            observeURL();
-        };
-        window.addEventListener("popstate", observeURL);
-        window.addEventListener("hashchange", observeURL);
-        setInterval(observeURL, 1000);
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            characterDataOldValue: false
+        });
+        carouselState.carouselObserver = observer;
     }
 
-    function cleanListingObserver() {
+    function initCleanListingObserver() {
         const observer = new MutationObserver(() => {
             cleanListingURLs();
         });
@@ -403,47 +392,69 @@
         });
     }
 
+    function observeURLMutation() {
+        let previousURL = location.href;
+        const handleURLChange = () => {
+            const currentURL = location.href;
+            if (currentURL !== previousURL) {
+                previousURL = currentURL;
+                hideOrShowPanel();
+                scheduleHighlightUpdate();
+            }
+        };
+        ["pushState", "replaceState"].forEach(method => {
+            const original = history[method];
+            history[method] = function(...args) {
+                const result = original.apply(this, args);
+                handleURLChange();
+                return result;
+            };
+        });
+        window.addEventListener("popstate", handleURLChange);
+        window.addEventListener("hashchange", handleURLChange);
+        const observer = new MutationObserver(handleURLChange);
+        observer.observe(document, {
+            subtree: true,
+            childList: true
+        });
+    }
+
     async function buildPanel() {
         const wrapper = document.createElement("div");
         wrapper.id = "panelWrapper";
         const box = document.createElement("div");
         box.id = "panelBox";
-
         const header = buildPanelHeader();
         const sponsoredCount = await processSponsoredContent();
-        const body = determinePanelState(sponsoredCount, state.hidingEnabled);
+        const body = determinePanelState(sponsoredCount, state.ui.hidingEnabled);
         const footer = buildPanelFooter();
-        const topDivider = document.createElement("hr");
-        topDivider.className = "section-divider";
-        const bottomDivider = document.createElement("hr");
-        bottomDivider.className = "section-divider";
-
-        box.appendChild(header);
-        box.appendChild(topDivider);
-        box.appendChild(body);
-        box.appendChild(bottomDivider);
-        box.appendChild(footer);
+        const createDivider = () => {
+            const hr = document.createElement("hr");
+            hr.className = "section-divider";
+            return hr;
+        };
+        box.append(header, createDivider(), body, createDivider(), footer);
         wrapper.appendChild(box);
         document.body.appendChild(wrapper);
-
         const minimizePanelButton = document.getElementById("minimizePanelButton");
-        minimizePanelButton.addEventListener("click", () => {
-            const panelBox = document.getElementById("panelBox");
-            const isCurrentlyMinimized = panelBox.classList.contains("minimized");
-            const newState = !isCurrentlyMinimized;
-            localStorage.setItem("panelMinimized", newState);
-            minimizePanel(newState);
-        });
+        if (minimizePanelButton) {
+            minimizePanelButton.addEventListener("click", () => {
+                const panelBox = document.getElementById("panelBox");
+                const newState = !panelBox.classList.contains("minimized");
+                localStorage.setItem("panelMinimized", newState);
+                minimizePanel(newState);
+            });
+        }
         const isPanelMinimized = localStorage.getItem("panelMinimized") === "true";
         minimizePanel(isPanelMinimized);
-        const toggleSponsoredContentSwitchInput = document.getElementById("toggleSponsoredContentSwitch");
-        if (!toggleSponsoredContentSwitchInput) {
+        const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
+        if (!toggleInput) {
             updateLockIcon();
             return;
         }
-        toggleSponsoredContentSwitchInput.addEventListener("change", (e) => {
-            state.hidingEnabled = e.target.checked;
-            localStorage.setItem(APP_KEY_OBSTRUCT_SPONSORED, state.hidingEnabled);
+        toggleInput.addEventListener("change", (e) => {
+            state.ui.hidingEnabled = e.target.checked;
+            localStorage.setItem(APP_KEY_OBSTRUCT_SPONSORED, state.ui.hidingEnabled);
             updateLockIcon();
             scheduleHighlightUpdate();
         });
@@ -467,31 +478,32 @@
     }
 
     function buildPanelFooter() {
-        const creatorPage = document.createElement("a");
-        creatorPage.href = "https://github.com/OsborneLabs/Spotless";
-        creatorPage.target = "_blank";
-        creatorPage.rel = "noopener noreferrer";
-        creatorPage.style.textDecoration = "none";
-        creatorPage.textContent = "Osborne";
-        creatorPage.id = "creatorPage";
-
-        const separator = document.createElement("span");
-        separator.textContent = " · ";
-
-        const donatePage = document.createElement("a");
-        donatePage.href = "https://ko-fi.com/osbornelabs";
-        donatePage.target = "_blank";
-        donatePage.rel = "noopener noreferrer";
-        donatePage.innerHTML = APP_ICONS.heart;
-        donatePage.style.display = "inline-flex";
-        donatePage.style.alignItems = "center";
-        donatePage.style.justifyContent = "center";
-
-        const footer = document.createElement("div");
-        footer.className = "panel-footer";
-        footer.appendChild(creatorPage);
-        footer.appendChild(separator);
-        footer.appendChild(donatePage);
+        const footer = Object.assign(document.createElement("div"), {
+            className: "panel-footer",
+        });
+        const creatorLink = Object.assign(document.createElement("a"), {
+            id: "creatorPage",
+            href: "https://github.com/OsborneLabs/Spotless",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            textContent: "Osborne",
+        });
+        creatorLink.style.textDecoration = "none";
+        const separator = Object.assign(document.createElement("span"), {
+            textContent: " · ",
+        });
+        const donateLink = Object.assign(document.createElement("a"), {
+            href: "https://ko-fi.com/osbornelabs",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            innerHTML: APP_ICONS.heart,
+        });
+        Object.assign(donateLink.style, {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+        });
+        footer.append(creatorLink, separator, donateLink);
         return footer;
     }
 
@@ -515,7 +527,7 @@
         const row = buildPanelRow(`
             <span class="switch-label">Hide all sponsored</span>
             <label class="switch" aria-label="Toggles the visibility of sponsored items">
-                <input type="checkbox" id="toggleSponsoredContentSwitch" ${state.hidingEnabled ? "checked" : ""}>
+                <input type="checkbox" id="toggleSponsoredContentSwitch" ${state.ui.hidingEnabled ? "checked" : ""}>
                 <span class="slider"></span>
             </label>
         `);
@@ -524,50 +536,45 @@
     }
 
     function buildPanelHomePage() {
-        const pageContainer = document.createElement("div");
-        pageContainer.id = "panelPagecontainer";
-        pageContainer.classList.add("panel-page-container");
-
-        const homePage = document.createElement("div");
-        homePage.id = "homePage";
-        homePage.className = "panel-page";
+        const pageContainer = Object.assign(document.createElement("div"), {
+            id: "panelPagecontainer",
+            className: "panel-page-container",
+        });
+        const homePage = Object.assign(document.createElement("div"), {
+            id: "homePage",
+            className: "panel-page",
+        });
         homePage.style.display = "block";
-
-        const countSponsoredContentRow = buildSponsoredCountRow();
-        const toggleSponsoredContentRow = buildSponsoredToggleRow();
-
-        homePage.appendChild(countSponsoredContentRow);
-        homePage.appendChild(toggleSponsoredContentRow);
-        pageContainer.appendChild(homePage);
+        const countRow = buildSponsoredCountRow();
+        const toggleRow = buildSponsoredToggleRow();
+        homePage.append(countRow, toggleRow);
+        pageContainer.append(homePage);
         return pageContainer;
     }
 
     function buildPanelErrorPage() {
-        const errorPage = document.createElement("div");
-        errorPage.classList.add("error-page", "panel-page");
-
+        const errorPage = Object.assign(document.createElement("div"), {
+            className: "error-page panel-page",
+        });
         const errorMessage = document.createElement("p");
         errorMessage.textContent = "Nothing sponsored found";
         errorMessage.appendChild(document.createElement("br"));
-
-        const outboundUpdatePage = document.createElement("a");
-        outboundUpdatePage.textContent = "Update";
-        outboundUpdatePage.href = "https://greasyfork.org/en/scripts/541981-spotless-for-ebay";
-        outboundUpdatePage.target = "_blank";
-        outboundUpdatePage.rel = "noopener noreferrer";
-        outboundUpdatePage.classList.add("outbound-update-page");
-
-        const outboundStatusPage = document.createElement("a");
-        outboundStatusPage.textContent = "check status";
-        outboundStatusPage.href = "https://github.com/OsborneLabs/Spotless";
-        outboundStatusPage.target = "_blank";
-        outboundStatusPage.rel = "noopener noreferrer";
-        outboundStatusPage.classList.add("outbound-status-page");
-
-        errorMessage.appendChild(outboundUpdatePage);
-        errorMessage.appendChild(document.createTextNode(" or "));
-        errorMessage.appendChild(outboundStatusPage);
-        errorPage.appendChild(errorMessage);
+        const updateLink = Object.assign(document.createElement("a"), {
+            textContent: "Update",
+            href: "https://greasyfork.org/en/scripts/541981-spotless-for-ebay",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            className: "outbound-update-page",
+        });
+        const statusLink = Object.assign(document.createElement("a"), {
+            textContent: "check status",
+            href: "https://github.com/OsborneLabs/Spotless",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            className: "outbound-status-page",
+        });
+        errorMessage.append(updateLink, " or ", statusLink);
+        errorPage.append(errorMessage);
         return errorPage;
     }
 
@@ -585,11 +592,9 @@
     function minimizePanel(minimized) {
         const panelBox = document.getElementById("panelBox");
         if (!panelBox) return;
-
         const panelPage = panelBox.querySelector(".panel-page");
         const sectionDivider = panelBox.querySelectorAll(".section-divider");
         const panelFooter = panelBox.querySelector(".panel-footer");
-
         panelBox.classList.toggle("minimized", minimized);
         if (panelPage) panelPage.style.display = minimized ? "none" : "block";
         sectionDivider.forEach(el => {
@@ -601,8 +606,8 @@
     function updateLockIcon() {
         const locked = document.getElementById("lockedIcon");
         const unlocked = document.getElementById("unlockedIcon");
-        locked.classList.toggle("active", state.hidingEnabled);
-        unlocked.classList.toggle("active", !state.hidingEnabled);
+        locked.classList.toggle("active", state.ui.hidingEnabled);
+        unlocked.classList.toggle("active", !state.ui.hidingEnabled);
     }
 
     function determinePanelState(sponsoredCount) {
@@ -612,16 +617,32 @@
         return buildPanelHomePage();
     }
 
+    function validateCurrentPage() {
+        const url = new URL(location.href);
+        const params = url.searchParams;
+        const isSearchPage = /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/sch\//i.test(url.href);
+        const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
+        const isSellerPage = params.has("_ssn");
+        const isVisuallySimilarPage = params.get("_vss") === "1";
+        const isCompletedPage = params.get("LH_Complete") === "1";
+        const isSoldPage = params.get("LH_Sold") === "1";
+        return isSearchPage && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage;
+    }
+
+    function isListingPage() {
+        return /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
+    }
+
     async function processSponsoredContent() {
-        if (state.isContentProcessing) return 0;
-        state.isContentProcessing = true;
+        if (state.ui.isContentProcessing) return 0;
+        state.ui.isContentProcessing = true;
 
         try {
             observer.disconnect();
             resetSponsoredContent();
             const detectedSponsoredElements = new Set();
-            const base64Results = await detectSponsoredListingBySVG();
-            base64Results.forEach(el => {
+            const svgMethod = await detectSponsoredListingBySVG();
+            svgMethod.forEach(el => {
                 const li = el.closest("li");
                 if (li) detectedSponsoredElements.add(li);
             });
@@ -630,12 +651,12 @@
                 invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
-                const dimensionBasedResults = detectSponsoredListingBySeparatorSize();
-                dimensionBasedResults.forEach(li => detectedSponsoredElements.add(li));
+                const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
+                separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
-                const ariaGroupResults = detectSponsoredListingByAriaGroup();
-                ariaGroupResults.forEach(li => detectedSponsoredElements.add(li));
+                const ariaGroupMethod = detectSponsoredListingByAriaGroup();
+                ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
             }
             requestAnimationFrame(() => {
                 const count = detectedSponsoredElements.size;
@@ -645,7 +666,7 @@
                         if (!el.hasAttribute("data-sponsored-processed")) {
                             designateSponsoredContent(el);
                             highlightSponsoredContent(el);
-                            hideShowSponsoredContent(el, state.hidingEnabled);
+                            hideShowSponsoredContent(el, state.ui.hidingEnabled);
                         }
                     }
                 }
@@ -655,24 +676,26 @@
                 cleanGeneralClutter();
                 hideOrShowPanel();
                 countSponsoredContent(count);
-                initializeObserver();
-                state.isContentProcessing = false;
+                initObserver();
+                state.ui.isContentProcessing = false;
             });
             return detectedSponsoredElements.size;
         } catch (err) {
             console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
-            state.isContentProcessing = false;
-            initializeObserver();
+            state.ui.isContentProcessing = false;
+            initObserver();
             return 0;
         }
     }
 
     function validateSponsoredCount(sponsoredCount) {
-        const listingCount = getListingElements().length;
+        const listings = getListingElements();
+        const listingCount = listings.length;
         if (listingCount === 0) return false;
-        const maxPercent = 0.5;
+        const MIN_SPONSORED = 2;
+        const MAX_PERCENT = 0.5;
         const sponsoredPercent = sponsoredCount / listingCount;
-        return sponsoredCount >= 2 && sponsoredPercent <= maxPercent;
+        return sponsoredCount >= MIN_SPONSORED && sponsoredPercent <= MAX_PERCENT;
     }
 
     function countSponsoredContent(count) {
@@ -696,19 +719,22 @@
                 const end = Math.min(index + batchSize, listings.length);
                 const batch = listings.slice(index, end);
                 let processedInBatch = 0;
-
                 if (batch.length === 0) {
                     resolve(sponsoredElements);
                     return;
                 }
                 batch.forEach((listing) => {
-                    const svgImage = listing.querySelector(".s-item__sep span[aria-hidden='true']");
-                    if (!svgImage) return done();
-
-                    const backgroundImage = getComputedStyle(svgImage.parentElement).backgroundImage;
+                    let svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
+                    let backgroundImage;
+                    if (svgDivSpan) {
+                        backgroundImage = getComputedStyle(svgDivSpan.parentElement).backgroundImage;
+                    } else {
+                        const svgDivB = listing.querySelector(".s-card__sep b[style*='data:image/svg+xml']");
+                        if (!svgDivB) return done();
+                        backgroundImage = getComputedStyle(svgDivB).backgroundImage;
+                    }
                     const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
                     if (!match || !match[1]) return done();
-
                     const base64 = match[1];
                     const svgString = atob(base64);
                     const img = new Image();
@@ -742,10 +768,7 @@
                         }
                         done();
                     };
-
-                    img.onerror = () => {
-                        done();
-                    };
+                    img.onerror = done;
 
                     function done() {
                         processedInBatch++;
@@ -755,7 +778,6 @@
                         }
                     }
                 });
-                if (batch.length === 0) resolve(sponsoredElements);
             }
             if (listings.length === 0) {
                 resolve([]);
@@ -886,114 +908,133 @@
                 const banners = Array.from(
                     document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
                 ).filter((el) => el.offsetHeight >= 140);
-                banners.forEach(banner => {
+                const filteredBanners = banners.filter(banner => {
+                    const h1 = banner.querySelector("h1");
+                    if (h1 && /shop similar items/i.test(h1.textContent.trim())) {
+                        return false;
+                    }
+                    return true;
+                });
+                filteredBanners.forEach(banner => {
                     banner.classList.add("sponsored-hidden-banner");
                 });
-                resolve(banners);
+                resolve(filteredBanners);
             }, 600);
         });
     }
 
     function removeSponsoredRibbons() {
-        const breadcrumb = document.querySelector('.x-breadcrumb');
-        if (breadcrumb) {
-            breadcrumb.remove();
-        }
-        const placements = document.querySelector('.x-pda-placements');
-        if (placements) {
-            placements.remove();
-        }
-        const ribbons = document.querySelector('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
+        document.querySelectorAll('.x-breadcrumb, .x-pda-placements')
+            .forEach(el => el.remove());
         const whitelisted = ['statusmessage', 'x-alert'];
-        const isWhitelisted = ribbons && Array.from(ribbons.classList).some(cls =>
-            whitelisted.some(pattern => cls.includes(pattern))
-        );
-        if (ribbons && !isWhitelisted) {
-            ribbons.style.minHeight = '48px';
-            ribbons.style.maxHeight = '100px';
-            ribbons.remove();
-        }
+        const ribbons = document.querySelectorAll('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
+        ribbons.forEach(ribbon => {
+            const isWhitelisted = whitelisted.some(pattern =>
+                ribbon.classList.value.includes(pattern)
+            );
+            if (!isWhitelisted) ribbon.remove();
+        });
     }
 
     function removeSponsoredCarousels() {
-        if (state.scrollListenerStopped || state.carouselTimeoutReached) return;
-        if (!isListingPage()) {
-            stopCarouselDetection();
-            return;
-        }
-        const carouselsExpected = 3;
-        let sponsoredCarouselCount = 0;
-        const sponsoredKeywords = new Set([
-            'sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
-        ]);
-        const sponsoredKeywordsArray = [...sponsoredKeywords];
-        const normalizeText = (text) => {
-            return text.trim()
-                .normalize("NFKC")
-                .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '')
-                .toLowerCase();
-        };
+        if (!isListingPage()) return;
+        const SPONSORED_KEYWORDS = [
+            'sponsored', 'anzeige', 'gesponsord', 'patrocinado',
+            'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
+        ];
+        const normalizeText = (text) =>
+            text.trim().normalize("NFKC").replace(/[\u200B-\u200D\u061C\uFEFF]/g, '').toLowerCase();
         const labelSponsored = (carousel) => {
             carousel.classList.add('sponsored-hidden-carousel');
-            sponsoredCarouselCount++;
-            if (sponsoredCarouselCount >= carouselsExpected) {
-                stopCarouselDetection();
-            }
+            removeSiteTelemetry(carousel);
         };
         const carousels = document.querySelectorAll('[data-viewport]');
-        for (const carousel of carousels) {
-            if (carousel.classList.contains('sponsored-hidden-carousel')) continue;
+        carousels.forEach(carousel => {
+            if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             const titleElement = carousel.querySelector('h2, h3, h4');
-            if (titleElement) {
-                const titleText = normalizeText(titleElement.textContent);
-                if (sponsoredKeywordsArray.some(keyword => titleText.includes(keyword))) {
-                    labelSponsored(carousel);
-                    continue;
-                }
+            if (titleElement && SPONSORED_KEYWORDS.some(kw => normalizeText(titleElement.textContent).includes(kw))) {
+                labelSponsored(carousel);
+                return;
             }
-            const elements = carousel.querySelectorAll('div, span');
-            for (const el of elements) {
-                const text = normalizeText(el.textContent);
-                if (sponsoredKeywordsArray.some(keyword => text.includes(keyword))) {
-                    labelSponsored(carousel);
-                    break;
-                }
+            const textElements = Array.from(carousel.querySelectorAll('div, span'));
+            if (textElements.some(el => SPONSORED_KEYWORDS.some(kw => normalizeText(el.textContent).includes(kw)))) {
+                labelSponsored(carousel);
+                return;
             }
-            const characterElements = Array.from(carousel.querySelectorAll('span'));
-            const characters = characterElements
+            const characters = textElements
                 .map(el => normalizeText(el.textContent))
-                .filter(text => text.length === 1 && /^\p{L}$/u.test(text));
-            for (const keyword of sponsoredKeywordsArray) {
-                let matchIndex = 0;
-                for (const char of characters) {
-                    if (char === keyword[matchIndex]) {
-                        matchIndex++;
-                        if (matchIndex === keyword.length) {
-                            labelSponsored(carousel);
-                            break;
+                .filter(t => t.length === 1 && /^\p{L}$/u.test(t));
+            if (SPONSORED_KEYWORDS.some(kw => {
+                    let matchIndex = 0;
+                    for (const char of characters) {
+                        if (char === kw[matchIndex]) {
+                            matchIndex++;
+                            if (matchIndex === kw.length) return true;
                         }
                     }
-                }
-                if (matchIndex === keyword.length) break;
+                    return false;
+                })) {
+                labelSponsored(carousel);
             }
-        }
+        });
+    }
+
+    function removeSiteTelemetry(context = document) {
+        const trackableSelector = '[trackableid], [trackablemoduleid]';
+        const removeTrackingAttributes = (el) => {
+            el.removeAttribute('trackableid');
+            el.removeAttribute('trackablemoduleid');
+        };
+        context.querySelectorAll('[data-viewport]').forEach((el) => {
+            el.setAttribute('data-viewport', '{}');
+            const trackedElements = el.matches(trackableSelector) ? [el, ...el.querySelectorAll(trackableSelector)] :
+                el.querySelectorAll(trackableSelector);
+            trackedElements.forEach(removeTrackingAttributes);
+        });
+        context.querySelectorAll('li[data-viewport]').forEach((li) => {
+            li.setAttribute('data-viewport', '{}');
+            li.removeAttribute('data-listingid');
+            li.removeAttribute('data-view');
+            li.removeAttribute('id');
+            const trackedElements = li.matches(trackableSelector) ? [li, ...li.querySelectorAll(trackableSelector)] :
+                li.querySelectorAll(trackableSelector);
+            trackedElements.forEach(removeTrackingAttributes);
+        });
+        const telemetryAttributesRegex = [
+            /^data-s-[a-z0-9]+$/i,
+            /^data-atf/i
+        ];
+        const telemetryAttributes = ['data-click', 'data-ebayui', 'data-track', '_sp'];
+        context.querySelectorAll('*').forEach((el) => {
+            Array.from(el.attributes).forEach(({
+                name
+            }) => {
+                if (telemetryAttributesRegex.some((rx) => rx.test(name)) || telemetryAttributes.includes(name)) {
+                    el.removeAttribute(name);
+                }
+            });
+        });
+        context.querySelectorAll('img[onerror]').forEach((img) => {
+            img.removeAttribute('onerror');
+        });
     }
 
     function designateSponsoredContent(el) {
         el.setAttribute("data-sponsored", "true");
         el.setAttribute("data-sponsored-processed", "true");
-        state.highlightedSponsoredContent.push(el);
+        state.ui.highlightedSponsoredContent.push(el);
     }
 
     function resetSponsoredContent() {
-        state.highlightedSponsoredContent.forEach(el => {
+        const elements = state.ui.highlightedSponsoredContent;
+        elements.forEach(el => {
             el.classList.remove("sponsored-hidden");
             el.removeAttribute("data-sponsored");
             el.removeAttribute("data-sponsored-processed");
             el.style.border = "";
             el.style.backgroundColor = "";
         });
-        state.highlightedSponsoredContent.length = 0;
+        elements.length = 0;
     }
 
     function highlightSponsoredContent(element) {
@@ -1006,97 +1047,72 @@
     }
 
     function cleanListingURLs() {
-        const url = /^https:\/\/www\.ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/;
+        const url = /^https:\/\/((?:[a-z0-9-]+\.)*)ebay\.([a-z.]+)\/itm\/(\d+)(?:[/?#].*)?/i;
         const links = document.querySelectorAll("a[href*='/itm/']");
         links.forEach((link) => {
             const match = link.href.match(url);
             if (match) {
-                const tld = match[1];
-                const itemId = match[2];
-                const cleanURL = `https://www.ebay.${tld}/itm/${itemId}`;
+                let subdomains = match[1] || "";
+                const tld = match[2];
+                const itemId = match[3];
+                const parts = subdomains.split(".").filter(Boolean).filter(p => p !== "www");
+                const subdomain = parts.length ? parts.join(".") + "." : "";
+                const cleanURL = `https://${subdomain}ebay.${tld}/itm/${itemId}`;
                 if (link.href !== cleanURL) {
                     link.href = cleanURL;
                 }
             }
+            link.removeAttribute("data-interactions");
         });
+        removeSiteTelemetry();
     }
 
     function cleanGeneralURLs() {
-        const links = document.querySelectorAll("a[href*='ebay.']");
-        links.forEach((link) => {
+        const TRACKING_KEYS = [
+            "_from", "_odkw", "_osacat", "_trksid", "campaign", "campid",
+            "mkcid", "mkevt", "mkrid", "promoted_items", "siteid", "source",
+            "sr", "templateId", "toolid"
+        ];
+        document.querySelectorAll("a[href*='ebay.']").forEach(link => {
             try {
                 const url = new URL(link.href);
-                const tldMatch = url.hostname.match(/(?:^|\.)ebay\.([a-z.]+)$/);
-                if (!tldMatch) return;
-                const params = new URLSearchParams(url.search);
-                APP_PARAM_OBSTRUCT_KEYS.forEach(param => {
-                    if (params.has(param)) {
-                        params.delete(param);
-                    }
-                });
-                for (const key of [...params.keys()]) {
+                if (!/(\.|^)ebay\.([a-z.]+)$/i.test(url.hostname)) return;
+                const params = url.searchParams;
+                TRACKING_KEYS.forEach(key => params.delete(key));
+                for (const key of params.keys()) {
                     if (key.startsWith("utm_") || key.startsWith("_trk")) {
                         params.delete(key);
                     }
                 }
-                const cleanURL = `${url.origin}${url.pathname}${params.toString() ? '?' + params.toString() : ''}${url.hash}`;
-                if (link.href !== cleanURL) {
-                    link.href = cleanURL;
-                }
-            } catch (e) {}
+                const cleanURL = `${url.origin}${url.pathname}${params.toString() ? "?" + params.toString() : ""}${url.hash}`;
+                if (link.href !== cleanURL) link.href = cleanURL;
+            } catch {}
+        });
+        document.querySelectorAll("form[action*='ebay.'], form[action='/sch/i.html']").forEach(form => {
+            const cleanFormInputs = () => {
+                form.querySelectorAll(TRACKING_KEYS.map(k => `[name='${k}']`).join(",")).forEach(input => input.remove());
+            };
+            cleanFormInputs();
+            form.addEventListener("submit", () => cleanFormInputs(), true);
         });
     }
 
     function cleanGeneralClutter() {
-        const removeBySubstring = (substring) => {
-            document.querySelectorAll(`[class*="${substring}"]`).forEach(el => {
-                el.remove();
-            });
-        };
-        ['EBAY_LIVE_ENTRY', 'FAQ_KW_SRP_MODULE'].forEach(substring => removeBySubstring(substring));
-        const clutter = ['.madrona-banner', '.s-feedback', '.s-faq-list'];
-        clutter.forEach(selector => {
-            document.querySelectorAll(selector).forEach(el => {
-                el.remove();
-            });
-        });
+        const selector = [
+            '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '.madrona-banner', '.s-feedback', '.s-faq-list'
+        ];
+        const elements = document.querySelectorAll(selector.join(','));
+        elements.forEach(el => el.remove());
     }
 
     function scheduleHighlightUpdate() {
-        if (state.updateScheduled || state.isContentProcessing) return;
-        state.updateScheduled = true;
+        if (state.ui.updateScheduled || state.ui.isContentProcessing) return;
+        state.ui.updateScheduled = true;
         requestAnimationFrame(() => {
             processSponsoredContent().finally(() => {
-                state.updateScheduled = false;
+                state.ui.updateScheduled = false;
             });
         });
-    }
-
-    function startCarouselDetection() {
-        if (state.scrollListenerStopped) return;
-        window.addEventListener('scroll', removeSponsoredCarousels, {
-            passive: true
-        });
-        scheduleCarouselTimeout();
-    }
-
-    function scheduleCarouselTimeout(seconds = 600) {
-        const ms = seconds * 1000;
-        state.carouselTimeoutId = setTimeout(() => {
-            if (state.scrollListenerStopped) return;
-            state.carouselTimeoutReached = true;
-            stopCarouselDetection();
-        }, ms);
-    }
-
-    function stopCarouselDetection() {
-        if (state.scrollListenerStopped) return;
-        state.scrollListenerStopped = true;
-        window.removeEventListener('scroll', removeSponsoredCarousels);
-        if (state.carouselTimeoutId !== null) {
-            clearTimeout(state.carouselTimeoutId);
-            state.carouselTimeoutId = null;
-        }
     }
 
     const observer = new MutationObserver(() => {
@@ -1104,35 +1120,39 @@
         scheduleHighlightUpdate();
     });
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', cleanListingObserver);
+        document.addEventListener('DOMContentLoaded', initCleanListingObserver);
     } else {
-        cleanListingObserver();
+        initCleanListingObserver();
     }
 
-    window.addEventListener("storage", (event) => {
-        if (event.key === APP_KEY_OBSTRUCT_SPONSORED) {
-            const newValue = event.newValue === "true";
-            if (newValue !== state.hidingEnabled) {
-                state.hidingEnabled = newValue;
-                const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
-                if (toggleInput) toggleInput.checked = state.hidingEnabled;
-                updateLockIcon();
-                scheduleHighlightUpdate();
-            }
-        } else if (event.key === "panelMinimized") {
-            minimizePanel(event.newValue === "true");
+    window.addEventListener("storage", ({
+        key,
+        newValue
+    }) => {
+        if (key === APP_KEY_OBSTRUCT_SPONSORED) {
+            const isEnabled = newValue === "true";
+            if (isEnabled === state.ui.hidingEnabled) return;
+            state.ui.hidingEnabled = isEnabled;
+            const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
+            if (toggleInput) toggleInput.checked = isEnabled;
+            updateLockIcon();
+            scheduleHighlightUpdate();
+            return;
+        }
+        if (key === "panelMinimized") {
+            minimizePanel(newValue === "true");
         }
     });
 
-    const delayedInit = async () => {
-        await new Promise(r => setTimeout(r, 200));
+    const initAfterDOM = async () => {
+        await new Promise(resolve => setTimeout(resolve, 200));
         init();
         removeSponsoredBanners();
     };
-    if (document.readyState === "complete" || document.readyState === "interactive") {
-        delayedInit();
+    if (["complete", "interactive"].includes(document.readyState)) {
+        initAfterDOM();
     } else {
-        window.addEventListener("DOMContentLoaded", delayedInit);
+        window.addEventListener("DOMContentLoaded", initAfterDOM);
     }
 
 })();
