@@ -11,15 +11,16 @@ Spotless runs on these sites
     <td rowspan="2">
       <img src="https://upload.wikimedia.org/wikipedia/commons/1/1b/EBay_logo.svg" width="120">
     </td>
-    <td colspan="4">Spotless for eBay: Hides sponsored listings, cleans urls, and removes sponsored items &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; No special permissions required</td>
+    <td colspan="4">Spotless for eBay: Hides sponsored listings, cleans urls, and removes sponsored items&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
   </tr>
   <tr>
     <td>
       <strong>License: GPL 3.0</strong>
     </td>
     <td>
-      <strong>Install: </strong>
-      <a href="https://greasyfork.org/en/scripts/541981-spotless-for-ebay">https://greasyfork.org/en/scripts/541981</a>
+      <a href="https://greasyfork.org/en/scripts/541981-spotless-for-ebay">
+        <strong>Install</strong>
+      </a>
     </td>
     <td>
       <img src="https://img.shields.io/badge/Version-v1.9.0-blue?style=for-the-badge">
