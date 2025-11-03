@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.9.0
+// @version      1.9.1
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -96,7 +96,7 @@
                 --size-text-body-error: 17px;
                 --size-text-body-normal: 14px;
                 --size-text-footer: 12px;
-                --size-text-header-title: 20px;
+                --size-text-header-title: 21px;
                 --size-thickness-highlight-border: 2px;
             }
             #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
@@ -156,6 +156,8 @@
                 gap: 8px;
             }
             #panelHeader h2.panel-title {
+                position: relative;
+                bottom: 1px;
                 font-size: var(--size-text-header-title);
                 font-weight: 600;
                 margin: 0;
@@ -176,7 +178,7 @@
                 margin-top: 5px;
             }
             .panel-footer {
-                height: 14px;
+                height: 13px;
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
@@ -483,7 +485,7 @@
         });
         const creatorLink = Object.assign(document.createElement("a"), {
             id: "creatorPage",
-            href: "https://github.com/OsborneLabs/Spotless",
+            href: "https://github.com/OsborneLabs/Spotless#ebay",
             target: "_blank",
             rel: "noopener noreferrer",
             textContent: "Osborne",
@@ -948,9 +950,11 @@
             carousel.classList.add('sponsored-hidden-carousel');
             removeSiteTelemetry(carousel);
         };
+        document.querySelectorAll('[class*="x-atc-layer"][class*="--ads"]').forEach(el => el.remove());
         const carousels = document.querySelectorAll('[data-viewport]');
         carousels.forEach(carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
+            if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
             const titleElement = carousel.querySelector('h2, h3, h4');
             if (titleElement && SPONSORED_KEYWORDS.some(kw => normalizeText(titleElement.textContent).includes(kw))) {
                 labelSponsored(carousel);
@@ -980,15 +984,15 @@
     }
 
     function removeSiteTelemetry(context = document) {
-        const trackableSelector = '[trackableid], [trackablemoduleid]';
+        const selector = '[trackableid], [trackablemoduleid]';
         const removeTrackingAttributes = (el) => {
             el.removeAttribute('trackableid');
             el.removeAttribute('trackablemoduleid');
         };
         context.querySelectorAll('[data-viewport]').forEach((el) => {
             el.setAttribute('data-viewport', '{}');
-            const trackedElements = el.matches(trackableSelector) ? [el, ...el.querySelectorAll(trackableSelector)] :
-                el.querySelectorAll(trackableSelector);
+            const trackedElements = el.matches(selector) ? [el, ...el.querySelectorAll(selector)] :
+                el.querySelectorAll(selector);
             trackedElements.forEach(removeTrackingAttributes);
         });
         context.querySelectorAll('li[data-viewport]').forEach((li) => {
@@ -996,8 +1000,8 @@
             li.removeAttribute('data-listingid');
             li.removeAttribute('data-view');
             li.removeAttribute('id');
-            const trackedElements = li.matches(trackableSelector) ? [li, ...li.querySelectorAll(trackableSelector)] :
-                li.querySelectorAll(trackableSelector);
+            const trackedElements = li.matches(selector) ? [li, ...li.querySelectorAll(selector)] :
+                li.querySelectorAll(selector);
             trackedElements.forEach(removeTrackingAttributes);
         });
         const telemetryAttributesRegex = [

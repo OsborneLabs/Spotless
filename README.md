@@ -1,4 +1,4 @@
-<p align=center><img src="https://cdn-icons-png.flaticon.com/512/10464/10464776.png" width="100" height="100"></p>
+<p align=center><img src="https://cdn-icons-png.flaticon.com/512/10464/10464776.png" width="90" height="90"></p>
 <h1 align=center>Spotless</h1><br>
 
 ## Sites
@@ -23,7 +23,7 @@ Spotless runs on these sites
       </a>
     </td>
     <td>
-      <img src="https://img.shields.io/badge/Version-v1.9.0-blue?style=for-the-badge">
+      <img src="https://img.shields.io/badge/Version-v1.9.1-blue?style=for-the-badge">
       <img src="https://img.shields.io/badge/Status-Passing-brightgreen?style=for-the-badge">
     </td>
   </tr>
