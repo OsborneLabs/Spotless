@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.9.1
+// @version      1.9.2
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -37,30 +37,18 @@
     "use strict";
 
     const APP_NAME = "Spotless";
-    const APP_NAME_DEBUG = "SPOTLESS FOR EBAY";
-    const APP_KEY_OBSTRUCT_SPONSORED = "hideSponsoredContent";
+    const APP_NAME_DEBUG_MODE = "SPOTLESS FOR EBAY";
+    const APP_KEY_HIDE_SPONSORED_CONTENT = "hideSponsoredContent";
     const APP_ICONS = {
-        locked: `
-            <svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/>
-            </svg>`,
-        unlocked: `
-            <svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/>
-            </svg>`,
-        arrow: `
-            <svg id="arrowIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M7 10l5 5 5-5z"/>
-            </svg>`,
-        heart: `
-            <svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>`
+        locked: `<svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/></svg>`,
+        unlocked: `<svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/></svg>`,
+        arrow: `<svg id="arrowIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>`,
+        heart: `<svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
     };
 
     const state = {
         ui: {
-            hidingEnabled: localStorage.getItem(APP_KEY_OBSTRUCT_SPONSORED) !== "false",
+            hidingEnabled: localStorage.getItem(APP_KEY_HIDE_SPONSORED_CONTENT) !== "false",
             highlightedSponsoredContent: [],
             isContentProcessing: false,
             updateScheduled: false,
@@ -90,10 +78,10 @@
                 --color-panel-row: rgba(20, 30, 45, 0.5);
                 --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 --color-panel: rgba(34, 50, 70, 0.85);
+                --color-text-link-default: var(--color-text-link-hover);
                 --color-text-link-hover: lightblue;
-                --color-text-link-visited: var(--color-text-link-hover);
                 --color-text-normal: white;
-                --size-text-body-error: 17px;
+                --size-text-body-error: 18px;
                 --size-text-body-normal: 14px;
                 --size-text-footer: 12px;
                 --size-text-header-title: 21px;
@@ -118,7 +106,7 @@
                     bottom: 5px;
                     left: 50%;
                     transform: translateX(-50%);
-                    width: 90% !important;
+                    width: 85% !important;
                     right: unset;
                     padding: 0 16px;
                 }
@@ -316,10 +304,10 @@
             }
             .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
-                color: var(--color-text-normal);
+                color: var(--color-text-link-default);
             }
             .outbound-status-page:visited, .outbound-update-page:visited {
-                color: var(--color-text-link-visited);
+                color: var(--color-text-link-default);
             }
             .sponsored-highlight {
                 border: var(--size-thickness-highlight-border) dashed var(--color-highlight-border) !important;
@@ -363,21 +351,14 @@
         const carouselState = state.carousel;
         if (carouselState.carouselObserverInitialized) return;
         carouselState.carouselObserverInitialized = true;
+        const targetContainer = document.querySelector('[data-results-container], main, .srp-results');
+        if (!targetContainer) return;
         const observer = new MutationObserver(() => {
-            if (!carouselState.carouselDetectionStopped) {
-                if (carouselState.carouselObserverTimeoutId) {
-                    clearTimeout(carouselState.carouselObserverTimeoutId);
-                }
-                carouselState.carouselObserverTimeoutId = setTimeout(() => {
-                    removeSponsoredCarousels();
-                }, 300);
-            }
+            removeSponsoredCarousels();
         });
-        observer.observe(document.body, {
+        observer.observe(targetContainer, {
             childList: true,
-            subtree: true,
-            characterData: true,
-            characterDataOldValue: false
+            subtree: true
         });
         carouselState.carouselObserver = observer;
     }
@@ -456,7 +437,7 @@
         }
         toggleInput.addEventListener("change", (e) => {
             state.ui.hidingEnabled = e.target.checked;
-            localStorage.setItem(APP_KEY_OBSTRUCT_SPONSORED, state.ui.hidingEnabled);
+            localStorage.setItem(APP_KEY_HIDE_SPONSORED_CONTENT, state.ui.hidingEnabled);
             updateLockIcon();
             scheduleHighlightUpdate();
         });
@@ -485,7 +466,7 @@
         });
         const creatorLink = Object.assign(document.createElement("a"), {
             id: "creatorPage",
-            href: "https://github.com/OsborneLabs/Spotless#ebay",
+            href: "https://github.com/OsborneLabs/Spotless",
             target: "_blank",
             rel: "noopener noreferrer",
             textContent: "Osborne",
@@ -570,7 +551,7 @@
         });
         const statusLink = Object.assign(document.createElement("a"), {
             textContent: "check status",
-            href: "https://github.com/OsborneLabs/Spotless",
+            href: "https://github.com/OsborneLabs/Spotless#ebay",
             target: "_blank",
             rel: "noopener noreferrer",
             className: "outbound-status-page",
@@ -683,7 +664,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error(`${APP_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
+            console.error(`${APP_NAME_DEBUG_MODE}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
             state.ui.isContentProcessing = false;
             initObserver();
             return 0;
@@ -928,7 +909,7 @@
     function removeSponsoredRibbons() {
         document.querySelectorAll('.x-breadcrumb, .x-pda-placements')
             .forEach(el => el.remove());
-        const whitelisted = ['statusmessage', 'x-alert'];
+        const whitelisted = ['statusmessage', 'x-alert', 'x-sme-atf', 'x-vi-evo-cvip-container'];
         const ribbons = document.querySelectorAll('.x-evo-atf-top-river.vi-grid.vim > .d-vi-evo-region.vim > div');
         ribbons.forEach(ribbon => {
             const isWhitelisted = whitelisted.some(pattern =>
@@ -940,7 +921,7 @@
 
     function removeSponsoredCarousels() {
         if (!isListingPage()) return;
-        const SPONSORED_KEYWORDS = [
+        const CAROUSEL_SPONSORED_KEYWORDS = [
             'sponsored', 'anzeige', 'gesponsord', 'patrocinado',
             'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
         ];
@@ -956,19 +937,19 @@
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
             const titleElement = carousel.querySelector('h2, h3, h4');
-            if (titleElement && SPONSORED_KEYWORDS.some(kw => normalizeText(titleElement.textContent).includes(kw))) {
+            if (titleElement && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(titleElement.textContent).includes(kw))) {
                 labelSponsored(carousel);
                 return;
             }
             const textElements = Array.from(carousel.querySelectorAll('div, span'));
-            if (textElements.some(el => SPONSORED_KEYWORDS.some(kw => normalizeText(el.textContent).includes(kw)))) {
+            if (textElements.some(el => CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(el.textContent).includes(kw)))) {
                 labelSponsored(carousel);
                 return;
             }
             const characters = textElements
                 .map(el => normalizeText(el.textContent))
                 .filter(t => t.length === 1 && /^\p{L}$/u.test(t));
-            if (SPONSORED_KEYWORDS.some(kw => {
+            if (CAROUSEL_SPONSORED_KEYWORDS.some(kw => {
                     let matchIndex = 0;
                     for (const char of characters) {
                         if (char === kw[matchIndex]) {
@@ -1008,7 +989,7 @@
             /^data-s-[a-z0-9]+$/i,
             /^data-atf/i
         ];
-        const telemetryAttributes = ['data-click', 'data-ebayui', 'data-track', '_sp'];
+        const telemetryAttributes = ['data-click', 'data-clientpresentationmetadata', 'data-ebayui', 'data-track', 'data-tracking', 'data-vi-tracking', '_sp'];
         context.querySelectorAll('*').forEach((el) => {
             Array.from(el.attributes).forEach(({
                 name
@@ -1072,7 +1053,7 @@
     }
 
     function cleanGeneralURLs() {
-        const TRACKING_KEYS = [
+        const GENERAL_TRACKING_KEYWORDS = [
             "_from", "_odkw", "_osacat", "_trksid", "campaign", "campid",
             "mkcid", "mkevt", "mkrid", "promoted_items", "siteid", "source",
             "sr", "templateId", "toolid"
@@ -1082,7 +1063,7 @@
                 const url = new URL(link.href);
                 if (!/(\.|^)ebay\.([a-z.]+)$/i.test(url.hostname)) return;
                 const params = url.searchParams;
-                TRACKING_KEYS.forEach(key => params.delete(key));
+                GENERAL_TRACKING_KEYWORDS.forEach(key => params.delete(key));
                 for (const key of params.keys()) {
                     if (key.startsWith("utm_") || key.startsWith("_trk")) {
                         params.delete(key);
@@ -1094,7 +1075,7 @@
         });
         document.querySelectorAll("form[action*='ebay.'], form[action='/sch/i.html']").forEach(form => {
             const cleanFormInputs = () => {
-                form.querySelectorAll(TRACKING_KEYS.map(k => `[name='${k}']`).join(",")).forEach(input => input.remove());
+                form.querySelectorAll(GENERAL_TRACKING_KEYWORDS.map(k => `[name='${k}']`).join(",")).forEach(input => input.remove());
             };
             cleanFormInputs();
             form.addEventListener("submit", () => cleanFormInputs(), true);
@@ -1103,7 +1084,7 @@
 
     function cleanGeneralClutter() {
         const selector = [
-            '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '.madrona-banner', '.s-feedback', '.s-faq-list'
+            '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]'
         ];
         const elements = document.querySelectorAll(selector.join(','));
         elements.forEach(el => el.remove());
@@ -1133,7 +1114,7 @@
         key,
         newValue
     }) => {
-        if (key === APP_KEY_OBSTRUCT_SPONSORED) {
+        if (key === APP_KEY_HIDE_SPONSORED_CONTENT) {
             const isEnabled = newValue === "true";
             if (isEnabled === state.ui.hidingEnabled) return;
             state.ui.hidingEnabled = isEnabled;
