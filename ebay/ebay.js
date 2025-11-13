@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.9.2
+// @version      1.9.3
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -55,10 +55,8 @@
             observerInitialized: false
         },
         carousel: {
-            carouselDetectionStopped: false,
             carouselObserver: null,
-            carouselObserverInitialized: false,
-            carouselObserverTimeoutId: null
+            carouselObserverInitialized: false
         }
     };
 
@@ -81,11 +79,26 @@
                 --color-text-link-default: var(--color-text-link-hover);
                 --color-text-link-hover: lightblue;
                 --color-text-normal: white;
+                --size-text-body-default: 14px;
                 --size-text-body-error: 18px;
-                --size-text-body-normal: 14px;
                 --size-text-footer: 12px;
                 --size-text-header-title: 21px;
                 --size-thickness-highlight-border: 2px;
+            }
+            @media (max-width: 768px) {
+                #panelWrapper {
+                    position: fixed;
+                    bottom: 5px;
+                    left: 50%;
+                    right: unset;
+                    transform: translateX(-50%);
+                    width: 85% !important;
+                    padding: 0 16px;
+                }
+                #panelHeader h2.panel-title {
+                    position: static;
+                    bottom: auto;
+                }
             }
             #panelWrapper, #panelBox, .lock-icon-animation, .lock-icon-animation.active {
                 box-sizing: border-box;
@@ -99,17 +112,6 @@
                 max-width: 320px;
                 padding: 0 16px;
                 font-family: "Segoe UI", sans-serif;
-            }
-            @media (max-width: 768px) {
-                #panelWrapper {
-                    position: fixed;
-                    bottom: 5px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    width: 85% !important;
-                    right: unset;
-                    padding: 0 16px;
-                }
             }
             #panelBox {
                 display: none;
@@ -153,7 +155,7 @@
             }
             .panel-body-row {
                 margin: 0;
-                font-size: var(--size-text-body-normal);
+                font-size: var(--size-text-body-default);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -331,9 +333,9 @@
         createStyles();
         buildPanel();
         hideOrShowPanel();
-        if (isListingPage()) {
-            removeSponsoredCarousels();
+        if (determineCarouselDetection()) {
             initCarouselObserver();
+            removeSponsoredCarousels();
         }
         await processSponsoredContent();
     }
@@ -351,7 +353,9 @@
         const carouselState = state.carousel;
         if (carouselState.carouselObserverInitialized) return;
         carouselState.carouselObserverInitialized = true;
-        const targetContainer = document.querySelector('[data-results-container], main, .srp-results');
+        const targetContainer =
+            document.querySelector('[data-results-container], main, .srp-results') ||
+            document.body;
         if (!targetContainer) return;
         const observer = new MutationObserver(() => {
             removeSponsoredCarousels();
@@ -600,6 +604,10 @@
         return buildPanelHomePage();
     }
 
+    function determineCarouselDetection() {
+        return isCheckoutPage() || isListingPage();
+    }
+
     function validateCurrentPage() {
         const url = new URL(location.href);
         const params = url.searchParams;
@@ -614,6 +622,10 @@
 
     function isListingPage() {
         return /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
+    }
+
+    function isCheckoutPage() {
+        return /^https:\/\/cart(\.[a-z0-9-]+)?\.ebay\.[a-z.]+/.test(location.href);
     }
 
     async function processSponsoredContent() {
@@ -920,7 +932,7 @@
     }
 
     function removeSponsoredCarousels() {
-        if (!isListingPage()) return;
+        if (!determineCarouselDetection()) return;
         const CAROUSEL_SPONSORED_KEYWORDS = [
             'sponsored', 'anzeige', 'gesponsord', 'patrocinado',
             'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
@@ -936,8 +948,8 @@
         carousels.forEach(carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
-            const titleElement = carousel.querySelector('h2, h3, h4');
-            if (titleElement && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(titleElement.textContent).includes(kw))) {
+            const titleElements = carousel.querySelector('h2, h3, h4');
+            if (titleElements && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(titleElements.textContent).includes(kw))) {
                 labelSponsored(carousel);
                 return;
             }
@@ -962,6 +974,10 @@
                 labelSponsored(carousel);
             }
         });
+        if (isCheckoutPage()) {
+            const selector = document.querySelectorAll('.dynamic-banner, .merch-container');
+            selector.forEach(el => el.remove());
+        }
     }
 
     function removeSiteTelemetry(context = document) {
@@ -986,10 +1002,11 @@
             trackedElements.forEach(removeTrackingAttributes);
         });
         const telemetryAttributesRegex = [
-            /^data-s-[a-z0-9]+$/i,
-            /^data-atf/i
+            /^data-atf/i,
+            /^data-gr\d$/i,
+            /^data-s-[a-z0-9]+$/i
         ];
-        const telemetryAttributes = ['data-click', 'data-clientpresentationmetadata', 'data-ebayui', 'data-track', 'data-tracking', 'data-vi-tracking', '_sp'];
+        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-tracking'];
         context.querySelectorAll('*').forEach((el) => {
             Array.from(el.attributes).forEach(({
                 name
@@ -1061,15 +1078,19 @@
         document.querySelectorAll("a[href*='ebay.']").forEach(link => {
             try {
                 const url = new URL(link.href);
-                if (!/(\.|^)ebay\.([a-z.]+)$/i.test(url.hostname)) return;
-                const params = url.searchParams;
-                GENERAL_TRACKING_KEYWORDS.forEach(key => params.delete(key));
-                for (const key of params.keys()) {
-                    if (key.startsWith("utm_") || key.startsWith("_trk")) {
-                        params.delete(key);
+                if (!/(^|\.)ebay\.[a-z.]+$/i.test(url.hostname)) return;
+                if (/^\/sch\/[^/]+\/m\.html$/i.test(url.pathname)) {
+                    url.search = "";
+                } else {
+                    const params = url.searchParams;
+                    GENERAL_TRACKING_KEYWORDS.forEach(key => params.delete(key));
+                    for (const key of Array.from(params.keys())) {
+                        if (key.startsWith("utm_") || key.startsWith("_trk")) {
+                            params.delete(key);
+                        }
                     }
                 }
-                const cleanURL = `${url.origin}${url.pathname}${params.toString() ? "?" + params.toString() : ""}${url.hash}`;
+                const cleanURL = `${url.origin}${url.pathname}${url.search}${url.hash}`;
                 if (link.href !== cleanURL) link.href = cleanURL;
             } catch {}
         });
@@ -1084,7 +1105,7 @@
 
     function cleanGeneralClutter() {
         const selector = [
-            '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]'
+            '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
         ];
         const elements = document.querySelectorAll(selector.join(','));
         elements.forEach(el => el.remove());
