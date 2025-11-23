@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.9.3
+// @version      1.9.4
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -78,7 +78,7 @@
                 --color-panel: rgba(34, 50, 70, 0.85);
                 --color-text-link-default: var(--color-text-link-hover);
                 --color-text-link-hover: lightblue;
-                --color-text-normal: white;
+                --color-text-default: white;
                 --size-text-body-default: 14px;
                 --size-text-body-error: 18px;
                 --size-text-footer: 12px;
@@ -122,7 +122,7 @@
                 gap: 0px;
                 background: var(--color-panel);
                 backdrop-filter: blur(10px);
-                color: var(--color-text-normal);
+                color: var(--color-text-default);
                 padding: 16px;
                 border-radius: 12px;
                 width: 100%;
@@ -151,7 +151,10 @@
                 font-size: var(--size-text-header-title);
                 font-weight: 600;
                 margin: 0;
-                color: var(--color-text-normal);
+                color: var(--color-text-default);
+            }
+            h2.panel-title, .panel-body-row, .panel-footer {
+                user-select: none;
             }
             .panel-body-row {
                 margin: 0;
@@ -174,7 +177,7 @@
                 justify-content: flex-end;
                 gap: 6px;
                 font-size: var(--size-text-footer);
-                color: var(--color-text-normal);
+                color: var(--color-text-default);
             }
             .panel-page-container {
                 position: relative;
@@ -242,7 +245,7 @@
             }
             #countBubble {
                 background-color: var(--color-app-bubble);
-                color: var(--color-text-normal);
+                color: var(--color-text-default);
                 font-size: 12px;
                 font-weight: bold;
                 padding: 3px 8px;
@@ -293,7 +296,7 @@
                 transform: translateX(20px);
             }
             #creatorPage {
-                color: var(--color-text-normal);
+                color: var(--color-text-default);
                 transition: color 0.3s ease;
             }
             #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover {
@@ -914,7 +917,7 @@
                     banner.classList.add("sponsored-hidden-banner");
                 });
                 resolve(filteredBanners);
-            }, 600);
+            }, 700);
         });
     }
 
@@ -944,6 +947,7 @@
             removeSiteTelemetry(carousel);
         };
         document.querySelectorAll('[class*="x-atc-layer"][class*="--ads"]').forEach(el => el.remove());
+        let sponsoredCarouselDetected = false;
         const carousels = document.querySelectorAll('[data-viewport]');
         carousels.forEach(carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
@@ -951,11 +955,13 @@
             const titleElements = carousel.querySelector('h2, h3, h4');
             if (titleElements && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(titleElements.textContent).includes(kw))) {
                 labelSponsored(carousel);
+                sponsoredCarouselDetected = true;
                 return;
             }
             const textElements = Array.from(carousel.querySelectorAll('div, span'));
             if (textElements.some(el => CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(el.textContent).includes(kw)))) {
                 labelSponsored(carousel);
+                sponsoredCarouselDetected = true;
                 return;
             }
             const characters = textElements
@@ -972,11 +978,16 @@
                     return false;
                 })) {
                 labelSponsored(carousel);
+                sponsoredCarouselDetected = true;
             }
         });
-        if (isCheckoutPage()) {
-            const selector = document.querySelectorAll('.dynamic-banner, .merch-container');
+        if (isCheckoutPage() && sponsoredCarouselDetected) {
+            const selector = document.querySelectorAll('.merch-container');
             selector.forEach(el => el.remove());
+        }
+        if (isCheckoutPage()) {
+            const dynamicBannerSelector = document.querySelectorAll('.dynamic-banner');
+            dynamicBannerSelector.forEach(el => el.remove());
         }
     }
 
