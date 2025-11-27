@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      1.9.4
+// @version      2.0.0
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -153,7 +153,7 @@
                 margin: 0;
                 color: var(--color-text-default);
             }
-            h2.panel-title, .panel-body-row, .panel-footer {
+            h2.panel-title, .panel-body-row, .panel-footer, .error-page {
                 user-select: none;
             }
             .panel-body-row {
@@ -634,16 +634,19 @@
     async function processSponsoredContent() {
         if (state.ui.isContentProcessing) return 0;
         state.ui.isContentProcessing = true;
-
         try {
             observer.disconnect();
             resetSponsoredContent();
             const detectedSponsoredElements = new Set();
-            const svgMethod = await detectSponsoredListingBySVG();
-            svgMethod.forEach(el => {
-                const li = el.closest("li");
-                if (li) detectedSponsoredElements.add(li);
-            });
+            const translateYMethod = detectSponsoredListingByTranslateY();
+            translateYMethod.forEach(li => detectedSponsoredElements.add(li));
+            if (detectedSponsoredElements.size === 0) {
+                const svgMethod = await detectSponsoredListingBySVG();
+                svgMethod.forEach(el => {
+                    const li = el.closest("li");
+                    if (li) detectedSponsoredElements.add(li);
+                });
+            }
             if (detectedSponsoredElements.size === 0) {
                 const invertMethod = detectSponsoredListingByInvertStyle();
                 invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
@@ -705,6 +708,54 @@
         return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
             (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
         );
+    }
+
+    function detectSponsoredListingByTranslateY() {
+        const listings = getListingElements();
+        if (!listings.length) return [];
+        const listingCache = new WeakMap();
+        const groups = new Map();
+        const translateYMap = new Map();
+        for (const sheet of document.styleSheets) {
+            let rules;
+            try {
+                rules = sheet.cssRules;
+            } catch {
+                continue;
+            }
+            if (!rules) continue;
+            for (const rule of rules) {
+                const sel = rule.selectorText;
+                if (!sel) continue;
+                const m = rule.cssText.match(/translateY\((-?\d+)\s*px\)/i);
+                if (m) translateYMap.set(sel, Number(m[1]));
+            }
+        }
+        for (const listing of listings) {
+            if (listingCache.has(listing)) {
+                const v = listingCache.get(listing);
+                (groups.get(v) || groups.set(v, []).get(v)).push(listing);
+                continue;
+            }
+            const span = listing.querySelector("span[role='heading']");
+            if (!span) continue;
+            const cls = Array.from(span.classList).find(c => c.startsWith("s-"));
+            if (!cls) continue;
+            const selector = `span.${cls} > div`;
+            const val = translateYMap.get(selector);
+            if (val == null) continue;
+            listingCache.set(listing, val);
+            (groups.get(val) || groups.set(val, []).get(val)).push(listing);
+        }
+        let sponsoredVal = null;
+        let minCount = Infinity;
+        for (const [val, arr] of groups.entries()) {
+            if (arr.length < minCount) {
+                minCount = arr.length;
+                sponsoredVal = val;
+            }
+        }
+        return sponsoredVal != null ? groups.get(sponsoredVal) : [];
     }
 
     function detectSponsoredListingBySVG(batchSize = 10) {
@@ -986,8 +1037,8 @@
             selector.forEach(el => el.remove());
         }
         if (isCheckoutPage()) {
-            const dynamicBannerSelector = document.querySelectorAll('.dynamic-banner');
-            dynamicBannerSelector.forEach(el => el.remove());
+            const selector = document.querySelectorAll('.dynamic-banner');
+            selector.forEach(el => el.remove());
         }
     }
 
@@ -1017,7 +1068,7 @@
             /^data-gr\d$/i,
             /^data-s-[a-z0-9]+$/i
         ];
-        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-tracking'];
+        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking', 'data-vi-tracking'];
         context.querySelectorAll('*').forEach((el) => {
             Array.from(el.attributes).forEach(({
                 name
