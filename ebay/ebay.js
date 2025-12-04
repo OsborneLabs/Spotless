@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.0.0
+// @version      2.1.0
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -52,7 +52,8 @@
             highlightedSponsoredContent: [],
             isContentProcessing: false,
             updateScheduled: false,
-            observerInitialized: false
+            observerInitialized: false,
+            classFontCache: new Map()
         },
         carousel: {
             carouselObserver: null,
@@ -614,7 +615,7 @@
     function validateCurrentPage() {
         const url = new URL(location.href);
         const params = url.searchParams;
-        const isSearchPage = /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/sch\//i.test(url.href);
+        const isSearchPage = /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/(sch|shop)\//i.test(url.href);
         const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
         const isSellerPage = params.has("_ssn");
         const isVisuallySimilarPage = params.get("_vss") === "1";
@@ -638,8 +639,12 @@
             observer.disconnect();
             resetSponsoredContent();
             const detectedSponsoredElements = new Set();
-            const translateYMethod = detectSponsoredListingByTranslateY();
-            translateYMethod.forEach(li => detectedSponsoredElements.add(li));
+            const fontFamilyMethod = detectSponsoredListingByFontFamily();
+            fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
+            if (detectedSponsoredElements.size === 0) {
+                const translateYMethod = detectSponsoredListingByTranslateY();
+                translateYMethod.forEach(li => detectedSponsoredElements.add(li));
+            }
             if (detectedSponsoredElements.size === 0) {
                 const svgMethod = await detectSponsoredListingBySVG();
                 svgMethod.forEach(el => {
@@ -710,6 +715,40 @@
         );
     }
 
+    function detectSponsoredListingByFontFamily() {
+        const listings = getListingElements();
+        if (!listings.length) return new Set();
+        const groups = new Map();
+        const fontCache = new WeakMap();
+        for (const li of listings) {
+            const badgeSpan = li.querySelector('div[role="heading"] > span[aria-hidden="true"]');
+            if (!badgeSpan) continue;
+            const wrapper = badgeSpan.parentElement;
+            if (!wrapper) continue;
+            let fontFamily = fontCache.get(wrapper);
+            if (!fontFamily) {
+                fontFamily = getComputedStyle(wrapper).fontFamily;
+                if (!fontFamily) continue;
+                fontFamily = fontFamily
+                    .replace(/["']/g, "")
+                    .trim()
+                    .toLowerCase();
+                fontCache.set(wrapper, fontFamily);
+            }
+            if (!groups.has(fontFamily)) groups.set(fontFamily, []);
+            groups.get(fontFamily).push(li);
+        }
+        let sponsoredGroup = null;
+        let minSize = Infinity;
+        for (const arr of groups.values()) {
+            if (arr.length < minSize) {
+                minSize = arr.length;
+                sponsoredGroup = arr;
+            }
+        }
+        return new Set(sponsoredGroup || []);
+    }
+
     function detectSponsoredListingByTranslateY() {
         const listings = getListingElements();
         if (!listings.length) return [];
@@ -747,15 +786,15 @@
             listingCache.set(listing, val);
             (groups.get(val) || groups.set(val, []).get(val)).push(listing);
         }
-        let sponsoredVal = null;
+        let sponsoredGroup = null;
         let minCount = Infinity;
         for (const [val, arr] of groups.entries()) {
             if (arr.length < minCount) {
                 minCount = arr.length;
-                sponsoredVal = val;
+                sponsoredGroup = val;
             }
         }
-        return sponsoredVal != null ? groups.get(sponsoredVal) : [];
+        return sponsoredGroup != null ? groups.get(sponsoredGroup) : [];
     }
 
     function detectSponsoredListingBySVG(batchSize = 10) {
@@ -1167,7 +1206,7 @@
 
     function cleanGeneralClutter() {
         const selector = [
-            '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
+            '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
         ];
         const elements = document.querySelectorAll(selector.join(','));
         elements.forEach(el => el.remove());
