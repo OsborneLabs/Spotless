@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.1.0
+// @version      2.1.1
 // @description  Hides sponsored listings, cleans urls, and removes sponsored items
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -93,7 +93,7 @@
                     left: 50%;
                     right: unset;
                     transform: translateX(-50%);
-                    width: 85% !important;
+                    width: 90% !important;
                     padding: 0 16px;
                 }
                 #panelHeader h2.panel-title {
@@ -344,6 +344,26 @@
         await processSponsoredContent();
     }
 
+    function validateCurrentPage() {
+        const url = new URL(location.href);
+        const params = url.searchParams;
+        const isSearchPage = /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/(sch|shop)\//i.test(url.href);
+        const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
+        const isSellerPage = params.has("_ssn");
+        const isVisuallySimilarPage = params.get("_vss") === "1";
+        const isCompletedPage = params.get("LH_Complete") === "1";
+        const isSoldPage = params.get("LH_Sold") === "1";
+        return isSearchPage && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage;
+    }
+
+    function isListingPage() {
+        return /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
+    }
+
+    function isCheckoutPage() {
+        return /^https:\/\/cart(\.[a-z0-9-]+)?\.ebay\.[a-z.]+/.test(location.href);
+    }
+
     function initObserver() {
         if (state.ui.observerInitialized) return;
         observer.observe(document.body, {
@@ -507,7 +527,7 @@
 
     function buildSponsoredCountRow() {
         const row = buildPanelRow(`
-            <span>Sponsored items</span>
+            <span>Sponsored listings</span>
             <span id="countBubble">0</span>
         `);
         row.id = "countSponsoredContentRow";
@@ -517,7 +537,7 @@
     function buildSponsoredToggleRow() {
         const row = buildPanelRow(`
             <span class="switch-label">Hide all sponsored</span>
-            <label class="switch" aria-label="Toggles the visibility of sponsored items">
+            <label class="switch" aria-label="Toggles the visibility of sponsored listings">
                 <input type="checkbox" id="toggleSponsoredContentSwitch" ${state.ui.hidingEnabled ? "checked" : ""}>
                 <span class="slider"></span>
             </label>
@@ -612,26 +632,6 @@
         return isCheckoutPage() || isListingPage();
     }
 
-    function validateCurrentPage() {
-        const url = new URL(location.href);
-        const params = url.searchParams;
-        const isSearchPage = /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/(sch|shop)\//i.test(url.href);
-        const isAdvancedSearchPage = url.href.includes("ebayadvsearch");
-        const isSellerPage = params.has("_ssn");
-        const isVisuallySimilarPage = params.get("_vss") === "1";
-        const isCompletedPage = params.get("LH_Complete") === "1";
-        const isSoldPage = params.get("LH_Sold") === "1";
-        return isSearchPage && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage;
-    }
-
-    function isListingPage() {
-        return /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/itm\/\d+/.test(location.href);
-    }
-
-    function isCheckoutPage() {
-        return /^https:\/\/cart(\.[a-z0-9-]+)?\.ebay\.[a-z.]+/.test(location.href);
-    }
-
     async function processSponsoredContent() {
         if (state.ui.isContentProcessing) return 0;
         state.ui.isContentProcessing = true;
@@ -642,8 +642,22 @@
             const fontFamilyMethod = detectSponsoredListingByFontFamily();
             fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
             if (detectedSponsoredElements.size === 0) {
+                const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
+                separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const ariaGroupMethod = detectSponsoredListingByAriaGroup();
+                ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
                 const translateYMethod = detectSponsoredListingByTranslateY();
                 translateYMethod.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const invertMethod = detectSponsoredListingByInvertStyle();
+                if (invertMethod?.elements) {
+                    invertMethod.elements.forEach(li => detectedSponsoredElements.add(li));
+                }
             }
             if (detectedSponsoredElements.size === 0) {
                 const svgMethod = await detectSponsoredListingBySVG();
@@ -652,22 +666,10 @@
                     if (li) detectedSponsoredElements.add(li);
                 });
             }
-            if (detectedSponsoredElements.size === 0) {
-                const invertMethod = detectSponsoredListingByInvertStyle();
-                invertMethod.elements?.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
-                const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
-                separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
-                const ariaGroupMethod = detectSponsoredListingByAriaGroup();
-                ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
             requestAnimationFrame(() => {
                 const count = detectedSponsoredElements.size;
-                const sponsoredDetectionSucceeded = validateSponsoredCount(count);
-                if (sponsoredDetectionSucceeded) {
+                const sponsoredDetectionValid = validateSponsoredCount(count);
+                if (sponsoredDetectionValid) {
                     for (const el of detectedSponsoredElements) {
                         if (!el.hasAttribute("data-sponsored-processed")) {
                             designateSponsoredContent(el);
@@ -713,6 +715,62 @@
         return Array.from(document.querySelectorAll("li[class*='s-']")).filter(
             (el) => el.className.split(/\s+/).some((cls) => /^s-[\w-]+$/.test(cls))
         );
+    }
+
+    function detectSponsoredListingBySeparatorSize() {
+        const listings = getListingElements();
+        const sponsoredListings = [];
+        listings.forEach(listing => {
+            const separatorSpan = listing.querySelector('span.s-item__sep');
+            if (!separatorSpan) return;
+            const innerSpan = separatorSpan.querySelector('span');
+            const width = innerSpan?.offsetWidth || 0;
+            const height = innerSpan?.offsetHeight || 0;
+            const isSponsored = width > 0 && height > 0;
+            if (isSponsored) {
+                sponsoredListings.push(listing);
+            }
+        });
+        return sponsoredListings;
+    }
+
+    function detectSponsoredListingByAriaGroup() {
+        function generateAriaGroupLabel(num) {
+            let letters = '';
+            do {
+                letters = String.fromCharCode(65 + (num % 26)) + letters;
+                num = Math.floor(num / 26) - 1;
+            } while (num >= 0);
+            return letters;
+        }
+        const listings = getListingElements();
+        const groupMap = {};
+        const ariaLabelToGroup = {};
+        let groupCounter = 0;
+        listings.forEach(listing => {
+            const labelSpan = listing.querySelector('span[aria-labelledby]');
+            if (!labelSpan) return;
+            const ariaLabel = labelSpan.getAttribute('aria-labelledby');
+            if (!ariaLabel || !ariaLabel.includes("s-")) return;
+            if (!ariaLabelToGroup[ariaLabel]) {
+                ariaLabelToGroup[ariaLabel] = `Group ${generateAriaGroupLabel(groupCounter)}`;
+                groupCounter++;
+            }
+            const group = ariaLabelToGroup[ariaLabel];
+            if (!groupMap[group]) {
+                groupMap[group] = [];
+            }
+            groupMap[group].push(listing);
+        });
+        let sponsoredGroup = null;
+        let minCount = Infinity;
+        for (const [group, listings] of Object.entries(groupMap)) {
+            if (listings.length < minCount) {
+                sponsoredGroup = group;
+                minCount = listings.length;
+            }
+        }
+        return sponsoredGroup ? groupMap[sponsoredGroup] : [];
     }
 
     function detectSponsoredListingByFontFamily() {
@@ -797,84 +855,6 @@
         return sponsoredGroup != null ? groups.get(sponsoredGroup) : [];
     }
 
-    function detectSponsoredListingBySVG(batchSize = 10) {
-        return new Promise((resolve) => {
-            const listings = getListingElements();
-            const sponsoredElements = [];
-            let index = 0;
-
-            function processBatch() {
-                const end = Math.min(index + batchSize, listings.length);
-                const batch = listings.slice(index, end);
-                let processedInBatch = 0;
-                if (batch.length === 0) {
-                    resolve(sponsoredElements);
-                    return;
-                }
-                batch.forEach((listing) => {
-                    let svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
-                    let backgroundImage;
-                    if (svgDivSpan) {
-                        backgroundImage = getComputedStyle(svgDivSpan.parentElement).backgroundImage;
-                    } else {
-                        const svgDivB = listing.querySelector(".s-card__sep b[style*='data:image/svg+xml']");
-                        if (!svgDivB) return done();
-                        backgroundImage = getComputedStyle(svgDivB).backgroundImage;
-                    }
-                    const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
-                    if (!match || !match[1]) return done();
-                    const base64 = match[1];
-                    const svgString = atob(base64);
-                    const img = new Image();
-                    const canvas = document.createElement("canvas");
-                    const ctx = canvas.getContext("2d");
-                    img.src = "data:image/svg+xml;base64," + btoa(svgString);
-                    img.onload = () => {
-                        canvas.width = img.naturalWidth || 20;
-                        canvas.height = img.naturalHeight || 20;
-                        ctx.drawImage(img, 0, 0);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                        const colors = new Set();
-                        const sampleWidth = 15;
-                        const sampleHeight = 15;
-                        for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
-                            for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
-                                const i = (y * canvas.width + x) * 4;
-                                const r = imageData[i];
-                                const g = imageData[i + 1];
-                                const b = imageData[i + 2];
-                                const a = imageData[i + 3];
-                                if (a > 0) {
-                                    colors.add(`${r},${g},${b}`);
-                                    if (colors.size > 1) break;
-                                }
-                            }
-                            if (colors.size > 1) break;
-                        }
-                        if (colors.size > 1) {
-                            sponsoredElements.push(listing);
-                        }
-                        done();
-                    };
-                    img.onerror = done;
-
-                    function done() {
-                        processedInBatch++;
-                        if (processedInBatch === batch.length) {
-                            index += batchSize;
-                            setTimeout(processBatch, 0);
-                        }
-                    }
-                });
-            }
-            if (listings.length === 0) {
-                resolve([]);
-            } else {
-                processBatch();
-            }
-        });
-    }
-
     function detectSponsoredListingByInvertStyle() {
         const invertStyleMatch = /div\.([a-zA-Z0-9_-]+)(?:\s+div)?\s*\{[^}]*color:\s*(black|white);[^}]*filter:\s*invert\(([-\d.]+)\)/g;
         const sponsoredGroups = {};
@@ -934,60 +914,80 @@
         };
     }
 
-    function detectSponsoredListingBySeparatorSize() {
-        const listings = getListingElements();
-        const sponsoredListings = [];
-        listings.forEach(listing => {
-            const separatorSpan = listing.querySelector('span.s-item__sep');
-            if (!separatorSpan) return;
-            const innerSpan = separatorSpan.querySelector('span');
-            const width = innerSpan?.offsetWidth || 0;
-            const height = innerSpan?.offsetHeight || 0;
-            const isSponsored = width > 0 && height > 0;
-            if (isSponsored) {
-                sponsoredListings.push(listing);
+    function detectSponsoredListingBySVG(batchSize = 10) {
+        return new Promise((resolve) => {
+            const listings = getListingElements();
+            const sponsoredElements = [];
+            let index = 0;
+            function processBatch() {
+                const end = Math.min(index + batchSize, listings.length);
+                const batch = listings.slice(index, end);
+                let processedInBatch = 0;
+                if (batch.length === 0) {
+                    resolve(sponsoredElements);
+                    return;
+                }
+                batch.forEach((listing) => {
+                    let svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
+                    let backgroundImage;
+                    if (svgDivSpan) {
+                        backgroundImage = getComputedStyle(svgDivSpan.parentElement).backgroundImage;
+                    } else {
+                        const svgDivB = listing.querySelector(".s-card__sep b[style*='data:image/svg+xml']");
+                        if (!svgDivB) return done();
+                        backgroundImage = getComputedStyle(svgDivB).backgroundImage;
+                    }
+                    const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
+                    if (!match || !match[1]) return done();
+                    const base64 = match[1];
+                    const svgString = atob(base64);
+                    const img = new Image();
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+                    img.src = "data:image/svg+xml;base64," + btoa(svgString);
+                    img.onload = () => {
+                        canvas.width = img.naturalWidth || 20;
+                        canvas.height = img.naturalHeight || 20;
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                        const colors = new Set();
+                        const sampleWidth = 15;
+                        const sampleHeight = 15;
+                        for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
+                            for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
+                                const i = (y * canvas.width + x) * 4;
+                                const r = imageData[i];
+                                const g = imageData[i + 1];
+                                const b = imageData[i + 2];
+                                const a = imageData[i + 3];
+                                if (a > 0) {
+                                    colors.add(`${r},${g},${b}`);
+                                    if (colors.size > 1) break;
+                                }
+                            }
+                            if (colors.size > 1) break;
+                        }
+                        if (colors.size > 1) {
+                            sponsoredElements.push(listing);
+                        }
+                        done();
+                    };
+                    img.onerror = done;
+                    function done() {
+                        processedInBatch++;
+                        if (processedInBatch === batch.length) {
+                            index += batchSize;
+                            setTimeout(processBatch, 0);
+                        }
+                    }
+                });
+            }
+            if (listings.length === 0) {
+                resolve([]);
+            } else {
+                processBatch();
             }
         });
-        return sponsoredListings;
-    }
-
-    function detectSponsoredListingByAriaGroup() {
-        function generateAriaGroupLabel(num) {
-            let letters = '';
-            do {
-                letters = String.fromCharCode(65 + (num % 26)) + letters;
-                num = Math.floor(num / 26) - 1;
-            } while (num >= 0);
-            return letters;
-        }
-        const listings = getListingElements();
-        const groupMap = {};
-        const ariaLabelToGroup = {};
-        let groupCounter = 0;
-        listings.forEach(listing => {
-            const labelSpan = listing.querySelector('span[aria-labelledby]');
-            if (!labelSpan) return;
-            const ariaLabel = labelSpan.getAttribute('aria-labelledby');
-            if (!ariaLabel || !ariaLabel.includes("s-")) return;
-            if (!ariaLabelToGroup[ariaLabel]) {
-                ariaLabelToGroup[ariaLabel] = `Group ${generateAriaGroupLabel(groupCounter)}`;
-                groupCounter++;
-            }
-            const group = ariaLabelToGroup[ariaLabel];
-            if (!groupMap[group]) {
-                groupMap[group] = [];
-            }
-            groupMap[group].push(listing);
-        });
-        let sponsoredGroup = null;
-        let minCount = Infinity;
-        for (const [group, listings] of Object.entries(groupMap)) {
-            if (listings.length < minCount) {
-                sponsoredGroup = group;
-                minCount = listings.length;
-            }
-        }
-        return sponsoredGroup ? groupMap[sponsoredGroup] : [];
     }
 
     function removeSponsoredBanners() {
@@ -1107,7 +1107,7 @@
             /^data-gr\d$/i,
             /^data-s-[a-z0-9]+$/i
         ];
-        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking', 'data-vi-tracking'];
+        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking', 'data-vi-tracking', 'modulemeta'];
         context.querySelectorAll('*').forEach((el) => {
             Array.from(el.attributes).forEach(({
                 name
@@ -1147,6 +1147,16 @@
 
     function hideShowSponsoredContent(element, hide) {
         element.classList.toggle("sponsored-hidden", hide);
+    }
+
+    function scheduleHighlightUpdate() {
+        if (state.ui.updateScheduled || state.ui.isContentProcessing) return;
+        state.ui.updateScheduled = true;
+        requestAnimationFrame(() => {
+            processSponsoredContent().finally(() => {
+                state.ui.updateScheduled = false;
+            });
+        });
     }
 
     function cleanListingURLs() {
@@ -1210,16 +1220,6 @@
         ];
         const elements = document.querySelectorAll(selector.join(','));
         elements.forEach(el => el.remove());
-    }
-
-    function scheduleHighlightUpdate() {
-        if (state.ui.updateScheduled || state.ui.isContentProcessing) return;
-        state.ui.updateScheduled = true;
-        requestAnimationFrame(() => {
-            processSponsoredContent().finally(() => {
-                state.ui.updateScheduled = false;
-            });
-        });
     }
 
     const observer = new MutationObserver(() => {
