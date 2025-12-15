@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.1.1
-// @description  Hides sponsored listings, cleans urls, and removes sponsored items
+// @version      2.2.0
+// @description  Hides sponsored listings, cleans urls, and removes site telemetry
 // @author       Osborne Labs
 // @license      GPL-3.0-only
 // @homepageURL  https://github.com/OsborneLabs/Spotless
@@ -55,6 +55,9 @@
             observerInitialized: false,
             classFontCache: new Map()
         },
+        banner: {
+            bannerUpdateScheduled: false
+        },
         carousel: {
             carouselObserver: null,
             carouselObserverInitialized: false
@@ -71,19 +74,20 @@
                 --color-app-switch-off: #CCC;
                 --color-app-switch-on: #2AA866;
                 --color-app-switch-thumb: white;
-                --color-highlight-background: rgba(255, 230, 230, 0.45);
+                --color-highlight-background: rgba(255, 230, 230, 0.30);
                 --color-highlight-border: #D95C5C;
                 --color-panel-divider: rgba(255, 255, 255, 0.1);
                 --color-panel-row: rgba(20, 30, 45, 0.5);
                 --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 --color-panel: rgba(34, 50, 70, 0.85);
-                --color-text-link-default: var(--color-text-link-hover);
-                --color-text-link-hover: lightblue;
+                --color-text-link-default: var(--color-text-link-app-hover);
+                --color-text-link-app-hover: lightblue;
+                --color-text-link-ebay-hover: #2854D9;
                 --color-text-default: white;
                 --size-text-body-default: 14px;
-                --size-text-body-error: 18px;
+                --size-text-body-error: 19px;
                 --size-text-footer: 12px;
-                --size-text-header-title: 21px;
+                --size-text-header-title: 23px;
                 --size-thickness-highlight-border: 2px;
             }
             @media (max-width: 768px) {
@@ -125,7 +129,7 @@
                 backdrop-filter: blur(10px);
                 color: var(--color-text-default);
                 padding: 16px;
-                border-radius: 12px;
+                border-radius: 14px;
                 width: 100%;
                 box-shadow: var(--color-panel-shadow);
                 transition: transform 0.2s ease;
@@ -166,13 +170,13 @@
                 background: var(--color-panel-row);
                 backdrop-filter: blur(12px);
                 padding: 12px 16px;
-                border-radius: 8px;
+                border-radius: 14px;
             }
             .panel-body-row + .panel-body-row {
                 margin-top: 5px;
             }
             .panel-footer {
-                height: 13px;
+                height: 10px;
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
@@ -301,12 +305,18 @@
                 transition: color 0.3s ease;
             }
             #creatorPage:hover, .outbound-status-page:hover, .outbound-update-page:hover {
-                color: var(--color-text-link-hover);
+                color: var(--color-text-link-app-hover);
             }
             .error-page {
                 text-align: center;
                 font-size: var(--size-text-body-error);
-                padding: 5px 0 5px 0;
+                padding: 9px 0;
+            }
+            .error-page p:first-child {
+                margin-bottom: 5px;
+            }
+            .error-page p:last-child {
+                margin-top: 0;
             }
             .outbound-status-page, .outbound-update-page {
                 text-decoration: underline;
@@ -314,6 +324,9 @@
             }
             .outbound-status-page:visited, .outbound-update-page:visited {
                 color: var(--color-text-link-default);
+            }
+            .seller-linked:hover {
+                color: var(--color-text-link-ebay-hover) !important;
             }
             .sponsored-highlight {
                 border: var(--size-thickness-highlight-border) dashed var(--color-highlight-border) !important;
@@ -341,6 +354,9 @@
             initCarouselObserver();
             removeSponsoredCarousels();
         }
+        if (isResultsPage()) {
+            initBannerObserver();
+        }
         await processSponsoredContent();
     }
 
@@ -354,6 +370,10 @@
         const isCompletedPage = params.get("LH_Complete") === "1";
         const isSoldPage = params.get("LH_Sold") === "1";
         return isSearchPage && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage;
+    }
+
+    function isResultsPage() {
+        return /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/sch\//i.test(location.href);
     }
 
     function isListingPage() {
@@ -371,6 +391,21 @@
             subtree: true,
         });
         state.ui.observerInitialized = true;
+    }
+
+    function initBannerObserver() {
+        const observer = new MutationObserver(() => {
+            if (state.banner.bannerUpdateScheduled) return;
+            state.banner.bannerUpdateScheduled = true;
+            requestAnimationFrame(() => {
+                state.banner.bannerUpdateScheduled = false;
+                removeSponsoredBanners(document);
+            });
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 
     function initCarouselObserver() {
@@ -567,9 +602,9 @@
         const errorPage = Object.assign(document.createElement("div"), {
             className: "error-page panel-page",
         });
-        const errorMessage = document.createElement("p");
-        errorMessage.textContent = "Nothing sponsored found";
-        errorMessage.appendChild(document.createElement("br"));
+        const message = document.createElement("p");
+        message.textContent = "Nothing sponsored found";
+        const links = document.createElement("p");
         const updateLink = Object.assign(document.createElement("a"), {
             textContent: "Update",
             href: "https://greasyfork.org/en/scripts/541981-spotless-for-ebay",
@@ -584,8 +619,8 @@
             rel: "noopener noreferrer",
             className: "outbound-status-page",
         });
-        errorMessage.append(updateLink, " or ", statusLink);
-        errorPage.append(errorMessage);
+        links.append(updateLink, " or ", statusLink);
+        errorPage.append(message, links);
         return errorPage;
     }
 
@@ -635,19 +670,20 @@
     async function processSponsoredContent() {
         if (state.ui.isContentProcessing) return 0;
         state.ui.isContentProcessing = true;
+
         try {
             observer.disconnect();
             resetSponsoredContent();
             const detectedSponsoredElements = new Set();
-            const fontFamilyMethod = detectSponsoredListingByFontFamily();
-            fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
-            if (detectedSponsoredElements.size === 0) {
-                const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
-                separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
+            const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
+            separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
             if (detectedSponsoredElements.size === 0) {
                 const ariaGroupMethod = detectSponsoredListingByAriaGroup();
                 ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
+            }
+            if (detectedSponsoredElements.size === 0) {
+                const fontFamilyMethod = detectSponsoredListingByFontFamily();
+                fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
                 const translateYMethod = detectSponsoredListingByTranslateY();
@@ -678,6 +714,7 @@
                         }
                     }
                 }
+                createSellerLink();
                 removeSponsoredRibbons();
                 cleanListingURLs();
                 cleanGeneralURLs();
@@ -919,6 +956,7 @@
             const listings = getListingElements();
             const sponsoredElements = [];
             let index = 0;
+
             function processBatch() {
                 const end = Math.min(index + batchSize, listings.length);
                 const batch = listings.slice(index, end);
@@ -973,6 +1011,7 @@
                         done();
                     };
                     img.onerror = done;
+
                     function done() {
                         processedInBatch++;
                         if (processedInBatch === batch.length) {
@@ -990,24 +1029,73 @@
         });
     }
 
-    function removeSponsoredBanners() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                const banners = Array.from(
-                    document.querySelectorAll(".s-answer-region-center-top.s-answer-region > div")
-                ).filter((el) => el.offsetHeight >= 140);
-                const filteredBanners = banners.filter(banner => {
-                    const h1 = banner.querySelector("h1");
-                    if (h1 && /shop similar items/i.test(h1.textContent.trim())) {
-                        return false;
-                    }
-                    return true;
-                });
-                filteredBanners.forEach(banner => {
-                    banner.classList.add("sponsored-hidden-banner");
-                });
-                resolve(filteredBanners);
-            }, 700);
+    function createSellerLink() {
+        const listings = getListingElements();
+        listings.forEach(listing => {
+            const sellerElements = listing.querySelectorAll(`
+                .su-card-container__attributes__secondary .s-card__attribute-row,
+                .s-card__program-badge-container--sellerOrStoreInfo
+            `);
+            sellerElements.forEach(el => {
+                let username, feedback;
+                const spans = el.querySelectorAll("span.su-styled-text");
+                if (spans.length >= 2) {
+                    username = spans[0].textContent.trim();
+                    feedback = spans[1].textContent.trim();
+                    el = spans[0].parentElement;
+                } else {
+                    const combinedSpan = el.querySelector("span.su-styled-text.default");
+                    if (!combinedSpan) return;
+                    const parts = combinedSpan.textContent.trim().split(/\s{2,}/);
+                    if (parts.length < 2) return;
+                    username = parts[0];
+                    feedback = parts[1];
+                    const wrapper = document.createElement("span");
+                    const usernameSpan = document.createElement("span");
+                    usernameSpan.textContent = username;
+                    const feedbackSpan = document.createElement("span");
+                    feedbackSpan.textContent = feedback;
+                    wrapper.appendChild(usernameSpan);
+                    wrapper.append(" ");
+                    wrapper.appendChild(feedbackSpan);
+                    combinedSpan.replaceWith(wrapper);
+                    el = wrapper;
+                }
+                if (!username) return;
+                if (el.querySelector("a.seller-linked")) return;
+                const link = document.createElement("a");
+                link.href = `https://${window.location.hostname.replace(/^www\./, "")}/usr/${encodeURIComponent(username)}`;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = username;
+                link.style.color = "var(--color-foreground-accent)";
+                link.style.textDecoration = "none";
+                link.classList.add("seller-linked");
+                const firstTextNode = el.firstChild;
+                if (firstTextNode) firstTextNode.replaceWith(link);
+                const feedbackSpan = Array.from(el.children).find(c => c.textContent === feedback);
+                if (feedbackSpan && el.contains(feedbackSpan)) {
+                    const bullet = document.createElement("span");
+                    bullet.textContent = " · ";
+                    bullet.style.padding = "0 0.15em";
+                    el.insertBefore(bullet, feedbackSpan);
+                    feedbackSpan.style.marginLeft = "0";
+                }
+            });
+        });
+    }
+
+    function removeSponsoredBanners(root = document) {
+        if (!(root instanceof Element || root instanceof Document)) {
+            return;
+        }
+        const banners = Array.from(
+            root.querySelectorAll(
+                ".s-answer-region-center-top.s-answer-region > :not(.sponsored-hidden-banner)"
+            )
+        ).filter(el => el.offsetHeight >= 140);
+        banners.forEach(banner => {
+            banner.classList.add("sponsored-hidden-banner");
         });
     }
 
@@ -1103,16 +1191,18 @@
             trackedElements.forEach(removeTrackingAttributes);
         });
         const telemetryAttributesRegex = [
-            /^data-atf/i,
-            /^data-gr\d$/i,
-            /^data-s-[a-z0-9]+$/i
+            /^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i
         ];
-        const telemetryAttributes = ['_sp', 'data-click', 'data-clientpresentationmetadata', 'data-defertimer', 'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking', 'data-vi-tracking', 'modulemeta'];
+        const TELEMETRY_ATTRIBUTES = [
+            '_sp', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
+            'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking',
+            'data-vi-tracking', 'modulemeta'
+        ];
         context.querySelectorAll('*').forEach((el) => {
             Array.from(el.attributes).forEach(({
                 name
             }) => {
-                if (telemetryAttributesRegex.some((rx) => rx.test(name)) || telemetryAttributes.includes(name)) {
+                if (telemetryAttributesRegex.some((rx) => rx.test(name)) || TELEMETRY_ATTRIBUTES.includes(name)) {
                     el.removeAttribute(name);
                 }
             });
@@ -1182,9 +1272,8 @@
 
     function cleanGeneralURLs() {
         const GENERAL_TRACKING_KEYWORDS = [
-            "_from", "_odkw", "_osacat", "_trksid", "campaign", "campid",
-            "mkcid", "mkevt", "mkrid", "promoted_items", "siteid", "source",
-            "sr", "templateId", "toolid"
+            "_from", "_odkw", "_osacat", "_trksid", "campaign", "campid", "mkcid", "mkevt", "mkrid",
+            "promoted_items", "siteid", "source", "sr", "templateId", "toolid"
         ];
         document.querySelectorAll("a[href*='ebay.']").forEach(link => {
             try {
@@ -1216,7 +1305,9 @@
 
     function cleanGeneralClutter() {
         const selector = [
-            '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback', '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
+            '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback',
+            '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]',
+            '[class*="START_LISTING_BANNER"]'
         ];
         const elements = document.querySelectorAll(selector.join(','));
         elements.forEach(el => el.remove());
@@ -1252,9 +1343,7 @@
     });
 
     const initAfterDOM = async () => {
-        await new Promise(resolve => setTimeout(resolve, 200));
         init();
-        removeSponsoredBanners();
     };
     if (["complete", "interactive"].includes(document.readyState)) {
         initAfterDOM();
