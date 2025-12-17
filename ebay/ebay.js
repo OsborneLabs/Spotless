@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.2.0
+// @version      2.2.1
 // @description  Hides sponsored listings, cleans urls, and removes site telemetry
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1031,58 +1031,58 @@
 
     function createSellerLink() {
         const listings = getListingElements();
-        listings.forEach(listing => {
-            const sellerElements = listing.querySelectorAll(`
-                .su-card-container__attributes__secondary .s-card__attribute-row,
-                .s-card__program-badge-container--sellerOrStoreInfo
-            `);
-            sellerElements.forEach(el => {
-                let username, feedback;
-                const spans = el.querySelectorAll("span.su-styled-text");
+        const hostname = window.location.hostname.replace(/^www\./, "");
+        for (const listing of listings) {
+            const sellerElements = listing.querySelectorAll(
+                ".su-card-container__attributes__secondary .s-card__attribute-row," +
+                ".s-card__program-badge-container--sellerOrStoreInfo"
+            );
+            for (const container of sellerElements) {
+                let username, feedback, targetEl = container;
+                const spans = container.querySelectorAll("span.su-styled-text");
                 if (spans.length >= 2) {
                     username = spans[0].textContent.trim();
                     feedback = spans[1].textContent.trim();
-                    el = spans[0].parentElement;
+                    targetEl = spans[0].parentElement;
                 } else {
-                    const combinedSpan = el.querySelector("span.su-styled-text.default");
-                    if (!combinedSpan) return;
-                    const parts = combinedSpan.textContent.trim().split(/\s{2,}/);
-                    if (parts.length < 2) return;
-                    username = parts[0];
-                    feedback = parts[1];
+                    const combined = container.querySelector("span.su-styled-text.default");
+                    if (!combined) continue;
+                    const parts = combined.textContent.trim().split(/\s{2,}/);
+                    if (parts.length < 2) continue;
+                    [username, feedback] = parts;
                     const wrapper = document.createElement("span");
-                    const usernameSpan = document.createElement("span");
-                    usernameSpan.textContent = username;
-                    const feedbackSpan = document.createElement("span");
-                    feedbackSpan.textContent = feedback;
-                    wrapper.appendChild(usernameSpan);
-                    wrapper.append(" ");
-                    wrapper.appendChild(feedbackSpan);
-                    combinedSpan.replaceWith(wrapper);
-                    el = wrapper;
+                    wrapper.append(
+                        document.createElement("span"),
+                        " ",
+                        document.createElement("span")
+                    );
+                    wrapper.children[0].textContent = username;
+                    wrapper.children[1].textContent = feedback;
+                    combined.replaceWith(wrapper);
+                    targetEl = wrapper;
                 }
-                if (!username) return;
-                if (el.querySelector("a.seller-linked")) return;
+                if (!username || targetEl.querySelector("a.seller-linked")) continue;
                 const link = document.createElement("a");
-                link.href = `https://${window.location.hostname.replace(/^www\./, "")}/usr/${encodeURIComponent(username)}`;
+                link.className = "seller-linked";
+                link.href = `https://${hostname}/usr/${encodeURIComponent(username)}`;
                 link.target = "_blank";
                 link.rel = "noopener noreferrer";
                 link.textContent = username;
-                link.style.color = "var(--color-foreground-accent)";
-                link.style.textDecoration = "none";
-                link.classList.add("seller-linked");
-                const firstTextNode = el.firstChild;
-                if (firstTextNode) firstTextNode.replaceWith(link);
-                const feedbackSpan = Array.from(el.children).find(c => c.textContent === feedback);
-                if (feedbackSpan && el.contains(feedbackSpan)) {
+                link.style.cssText = `
+                    color: var(--color-foreground-primary);
+                    text-decoration: none;
+                `;
+                targetEl.firstChild?.replaceWith(link);
+                const feedbackNode = targetEl.children[1];
+                if (feedbackNode && feedbackNode.textContent === feedback) {
                     const bullet = document.createElement("span");
                     bullet.textContent = " · ";
                     bullet.style.padding = "0 0.15em";
-                    el.insertBefore(bullet, feedbackSpan);
-                    feedbackSpan.style.marginLeft = "0";
+                    targetEl.insertBefore(bullet, feedbackNode);
+                    feedbackNode.style.marginLeft = "0";
                 }
-            });
-        });
+            }
+        }
     }
 
     function removeSponsoredBanners(root = document) {
@@ -1304,12 +1304,12 @@
     }
 
     function cleanGeneralClutter() {
-        const selector = [
+        const GENERAL_CLUTTER_ELEMENTS = [
             '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback',
             '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]',
             '[class*="START_LISTING_BANNER"]'
         ];
-        const elements = document.querySelectorAll(selector.join(','));
+        const elements = document.querySelectorAll(GENERAL_CLUTTER_ELEMENTS.join(','));
         elements.forEach(el => el.remove());
     }
 
@@ -1345,6 +1345,7 @@
     const initAfterDOM = async () => {
         init();
     };
+
     if (["complete", "interactive"].includes(document.readyState)) {
         initAfterDOM();
     } else {
