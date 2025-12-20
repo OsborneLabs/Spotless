@@ -11,7 +11,7 @@ Spotless runs on these sites
     <td rowspan="2">
       <img src="https://upload.wikimedia.org/wikipedia/commons/1/1b/EBay_logo.svg" width="120">
     </td>
-    <td colspan="4">Hides sponsored listings, cleans urls, and removes site telemetry&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+    <td colspan="4">Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
   </tr>
   <tr>
     <td>
@@ -23,7 +23,7 @@ Spotless runs on these sites
       </a>
     </td>
     <td>
-      <img src="https://img.shields.io/badge/Version-v2.2.1-blue?style=for-the-badge">
+      <img src="https://img.shields.io/badge/Version-v2.3.0-blue?style=for-the-badge">
       <img src="https://img.shields.io/badge/Status-Stable-brightgreen?style=for-the-badge">
     </td>
   </tr>

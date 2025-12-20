@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.2.1
-// @description  Hides sponsored listings, cleans urls, and removes site telemetry
+// @version      2.3.0
+// @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
 // @homepageURL  https://github.com/OsborneLabs/Spotless
@@ -358,6 +358,7 @@
             initBannerObserver();
         }
         await processSponsoredContent();
+        removeSiteTelemetryBundle();
     }
 
     function validateCurrentPage() {
@@ -1115,14 +1116,32 @@
     function removeSponsoredCarousels() {
         if (!determineCarouselDetection()) return;
         const CAROUSEL_SPONSORED_KEYWORDS = [
-            'sponsored', 'anzeige', 'gesponsord', 'patrocinado',
-            'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
+            'sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé',
+            'sponsorizzato', 'sponsorowane', '助贊'
         ];
-        const normalizeText = (text) =>
+        const normalizeText = text =>
             text.trim().normalize("NFKC").replace(/[\u200B-\u200D\u061C\uFEFF]/g, '').toLowerCase();
-        const labelSponsored = (carousel) => {
+        const BLOCK_MEDIA_REGEX = /^https:\/\/video\.ebaycdn\.net\//i;
+        const labelSponsored = carousel => {
             carousel.classList.add('sponsored-hidden-carousel');
             removeSiteTelemetry(carousel);
+            carousel.querySelectorAll('img[src]').forEach(img => {
+                if (/^https:\/\/i\.ebayimg\.com\/thumbs\/images\//.test(img.src)) {
+                    img.src = '';
+                }
+            });
+            carousel.querySelectorAll('video, audio').forEach(media => {
+                if (media.src && BLOCK_MEDIA_REGEX.test(media.src)) {
+                    if (typeof media.pause === 'function') media.pause();
+                    media.src = '';
+                    media.querySelectorAll('source').forEach(source => {
+                        if (source.src && BLOCK_MEDIA_REGEX.test(source.src)) source.src = '';
+                    });
+                    media.addEventListener('error', () => media.remove(), {
+                        once: true
+                    });
+                }
+            });
         };
         document.querySelectorAll('[class*="x-atc-layer"][class*="--ads"]').forEach(el => el.remove());
         let sponsoredCarouselDetected = false;
@@ -1159,56 +1178,107 @@
                 sponsoredCarouselDetected = true;
             }
         });
-        if (isCheckoutPage() && sponsoredCarouselDetected) {
-            const selector = document.querySelectorAll('.merch-container');
-            selector.forEach(el => el.remove());
-        }
         if (isCheckoutPage()) {
-            const selector = document.querySelectorAll('.dynamic-banner');
-            selector.forEach(el => el.remove());
+            document.querySelectorAll('.merch-container, .dynamic-banner').forEach(el => el.remove());
         }
+        const origFetch = window.fetch;
+        window.fetch = (input, init) => {
+            const url = typeof input === 'string' ? input : input.url;
+            if (BLOCK_MEDIA_REGEX.test(url)) {
+                const anySponsored = document.querySelector('.sponsored-hidden-carousel');
+                if (anySponsored) return new Promise(() => {});
+            }
+            return origFetch.call(this, input, init);
+        };
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            if (BLOCK_MEDIA_REGEX.test(url)) {
+                const anySponsored = document.querySelector('.sponsored-hidden-carousel');
+                if (anySponsored) return;
+            }
+            return origOpen.call(this, method, url, ...rest);
+        };
+    }
+
+    function removeSiteTelemetryBundle() {
+        removeSiteTelemetryScripts();
+        removeSiteTelemetrySRP();
     }
 
     function removeSiteTelemetry(context = document) {
-        const selector = '[trackableid], [trackablemoduleid]';
-        const removeTrackingAttributes = (el) => {
-            el.removeAttribute('trackableid');
-            el.removeAttribute('trackablemoduleid');
-        };
-        context.querySelectorAll('[data-viewport]').forEach((el) => {
-            el.setAttribute('data-viewport', '{}');
-            const trackedElements = el.matches(selector) ? [el, ...el.querySelectorAll(selector)] :
-                el.querySelectorAll(selector);
-            trackedElements.forEach(removeTrackingAttributes);
-        });
-        context.querySelectorAll('li[data-viewport]').forEach((li) => {
-            li.setAttribute('data-viewport', '{}');
-            li.removeAttribute('data-listingid');
-            li.removeAttribute('data-view');
-            li.removeAttribute('id');
-            const trackedElements = li.matches(selector) ? [li, ...li.querySelectorAll(selector)] :
-                li.querySelectorAll(selector);
-            trackedElements.forEach(removeTrackingAttributes);
-        });
-        const telemetryAttributesRegex = [
-            /^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i
-        ];
-        const TELEMETRY_ATTRIBUTES = [
+        const TRACKABLE_SELECTOR = '[trackableid], [trackablemoduleid]';
+        const TELEMETRY_ATTR_REGEX = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
+        const TELEMETRY_ATTRS = new Set([
             '_sp', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
-            'data-ebayui', 'data-testid', 'data-track', 'data-tracking', 'data-vi-scrolltracking',
-            'data-vi-tracking', 'modulemeta'
-        ];
-        context.querySelectorAll('*').forEach((el) => {
-            Array.from(el.attributes).forEach(({
-                name
-            }) => {
-                if (telemetryAttributesRegex.some((rx) => rx.test(name)) || TELEMETRY_ATTRIBUTES.includes(name)) {
+            'data-ebayui', 'data-operationid', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey',
+            'data-vi-scrolltracking', 'data-vi-tracking', 'modulemeta'
+        ]);
+        for (const el of context.querySelectorAll('*')) {
+            if (el.hasAttribute('data-viewport')) {
+                el.setAttribute('data-viewport', '{}');
+                if (el.matches('li')) {
+                    el.removeAttribute('data-listingid');
+                    el.removeAttribute('data-view');
+                    el.removeAttribute('id');
+                }
+                if (el.matches(TRACKABLE_SELECTOR)) {
+                    el.removeAttribute('trackableid');
+                    el.removeAttribute('trackablemoduleid');
+                }
+                for (const t of el.querySelectorAll(TRACKABLE_SELECTOR)) {
+                    t.removeAttribute('trackableid');
+                    t.removeAttribute('trackablemoduleid');
+                }
+            }
+            for (const attr of el.attributes) {
+                const name = attr.name;
+                if (TELEMETRY_ATTRS.has(name) || TELEMETRY_ATTR_REGEX.some(rx => rx.test(name))) {
                     el.removeAttribute(name);
                 }
-            });
-        });
-        context.querySelectorAll('img[onerror]').forEach((img) => {
-            img.removeAttribute('onerror');
+            }
+            if (el.tagName === 'INPUT' && el.type === 'hidden' && el.id && el.id.toLowerCase().startsWith('clientsideexperiments')) {
+                el.remove();
+                continue;
+            }
+            if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
+                el.removeAttribute('onerror');
+            }
+        }
+    }
+
+    function removeSiteTelemetryScripts() {
+        const BLOCK_SCRIPT_REGEX = /https:\/\/ir\.ebaystatic\.com\/rs\/c\/\d+tracking\/configuration\.js/i;
+        const origCreateElement = Document.prototype.createElement;
+        Document.prototype.createElement = function(tagName, options) {
+            const el = origCreateElement.call(this, tagName, options);
+            if (String(tagName).toLowerCase() === 'script') {
+                Object.defineProperty(el, 'src', {
+                    set(value) {
+                        if (BLOCK_SCRIPT_REGEX.test(value)) {
+                            this.type = 'javascript/blocked';
+                            return;
+                        }
+                        HTMLScriptElement.prototype.setAttribute.call(this, 'src', value);
+                    },
+                    get() {
+                        return HTMLScriptElement.prototype.getAttribute.call(this, 'src');
+                    },
+                    configurable: true
+                });
+            }
+            return el;
+        };
+    }
+
+    function removeSiteTelemetrySRP() {
+        let inert = Object.create(null);
+        Object.defineProperty(window, 'SRP', {
+            configurable: false,
+            enumerable: true,
+            get() {
+                return inert;
+            },
+            set(_) {}
         });
     }
 
@@ -1304,12 +1374,12 @@
     }
 
     function cleanGeneralClutter() {
-        const GENERAL_CLUTTER_ELEMENTS = [
+        const GENERAL_CLUTTER_ATTRS = [
             '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback',
-            '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]',
-            '[class*="START_LISTING_BANNER"]'
+            '.x-goldin-module', '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]',
+            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
         ];
-        const elements = document.querySelectorAll(GENERAL_CLUTTER_ELEMENTS.join(','));
+        const elements = document.querySelectorAll(GENERAL_CLUTTER_ATTRS.join(','));
         elements.forEach(el => el.remove());
     }
 
