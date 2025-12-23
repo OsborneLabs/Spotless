@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.3.0
+// @version      2.3.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1116,88 +1116,100 @@
     function removeSponsoredCarousels() {
         if (!determineCarouselDetection()) return;
         const CAROUSEL_SPONSORED_KEYWORDS = [
-            'sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé',
-            'sponsorizzato', 'sponsorowane', '助贊'
+            'sponsored', 'anzeige', 'gesponsord', 'patrocinado',
+            'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'
         ];
+        const BLOCK_MEDIA_REGEX = /^https:\/\/video\.ebaycdn\.net\//i;
         const normalizeText = text =>
             text.trim().normalize("NFKC").replace(/[\u200B-\u200D\u061C\uFEFF]/g, '').toLowerCase();
-        const BLOCK_MEDIA_REGEX = /^https:\/\/video\.ebaycdn\.net\//i;
         const labelSponsored = carousel => {
+            if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             carousel.classList.add('sponsored-hidden-carousel');
             removeSiteTelemetry(carousel);
-            carousel.querySelectorAll('img[src]').forEach(img => {
-                if (/^https:\/\/i\.ebayimg\.com\/thumbs\/images\//.test(img.src)) {
-                    img.src = '';
+            carousel.style.display = 'none';
+            carousel.querySelectorAll('video, audio, source').forEach(el => el.remove());
+            carousel.querySelectorAll('[data-src], [data-video-src]').forEach(el => {
+                el.removeAttribute('data-src');
+                el.removeAttribute('data-video-src');
+            });
+            const observer = new MutationObserver(mutations => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (!(node instanceof HTMLElement)) continue;
+                        if (node.matches?.('video, audio, source')) {
+                            node.remove();
+                            continue;
+                        }
+                        node.querySelectorAll?.('video, audio, source')
+                            .forEach(n => n.remove());
+                    }
                 }
             });
-            carousel.querySelectorAll('video, audio').forEach(media => {
-                if (media.src && BLOCK_MEDIA_REGEX.test(media.src)) {
-                    if (typeof media.pause === 'function') media.pause();
-                    media.src = '';
-                    media.querySelectorAll('source').forEach(source => {
-                        if (source.src && BLOCK_MEDIA_REGEX.test(source.src)) source.src = '';
-                    });
-                    media.addEventListener('error', () => media.remove(), {
-                        once: true
-                    });
-                }
+            observer.observe(carousel, {
+                childList: true,
+                subtree: true
             });
         };
         document.querySelectorAll('[class*="x-atc-layer"][class*="--ads"]').forEach(el => el.remove());
-        let sponsoredCarouselDetected = false;
         const carousels = document.querySelectorAll('[data-viewport]');
         carousels.forEach(carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
-            const titleElements = carousel.querySelector('h2, h3, h4');
-            if (titleElements && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(titleElements.textContent).includes(kw))) {
+            const title = carousel.querySelector('h2, h3, h4');
+            if (title && CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(title.textContent).includes(kw))) {
                 labelSponsored(carousel);
-                sponsoredCarouselDetected = true;
                 return;
             }
             const textElements = Array.from(carousel.querySelectorAll('div, span'));
             if (textElements.some(el => CAROUSEL_SPONSORED_KEYWORDS.some(kw => normalizeText(el.textContent).includes(kw)))) {
                 labelSponsored(carousel);
-                sponsoredCarouselDetected = true;
                 return;
             }
             const characters = textElements
                 .map(el => normalizeText(el.textContent))
                 .filter(t => t.length === 1 && /^\p{L}$/u.test(t));
             if (CAROUSEL_SPONSORED_KEYWORDS.some(kw => {
-                    let matchIndex = 0;
+                    let i = 0;
                     for (const char of characters) {
-                        if (char === kw[matchIndex]) {
-                            matchIndex++;
-                            if (matchIndex === kw.length) return true;
+                        if (char === kw[i]) {
+                            if (++i === kw.length) return true;
                         }
                     }
                     return false;
                 })) {
                 labelSponsored(carousel);
-                sponsoredCarouselDetected = true;
             }
         });
         if (isCheckoutPage()) {
             document.querySelectorAll('.merch-container, .dynamic-banner').forEach(el => el.remove());
         }
-        const origFetch = window.fetch;
-        window.fetch = (input, init) => {
-            const url = typeof input === 'string' ? input : input.url;
-            if (BLOCK_MEDIA_REGEX.test(url)) {
-                const anySponsored = document.querySelector('.sponsored-hidden-carousel');
-                if (anySponsored) return new Promise(() => {});
-            }
-            return origFetch.call(this, input, init);
-        };
-        const origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            if (BLOCK_MEDIA_REGEX.test(url)) {
-                const anySponsored = document.querySelector('.sponsored-hidden-carousel');
-                if (anySponsored) return;
-            }
-            return origOpen.call(this, method, url, ...rest);
-        };
+        if (!window.__ebaySponsoredMediaBlocked) {
+            window.__ebaySponsoredMediaBlocked = true;
+            const origFetch = window.fetch;
+            window.fetch = function(input, init) {
+                const url = typeof input === 'string' ? input : input?.url;
+                if (
+                    url &&
+                    BLOCK_MEDIA_REGEX.test(url) &&
+                    document.querySelector('.sponsored-hidden-carousel')
+                ) {
+                    return Promise.reject();
+                }
+                return origFetch.call(this, input, init);
+            };
+            const origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                if (
+                    url &&
+                    BLOCK_MEDIA_REGEX.test(url) &&
+                    document.querySelector('.sponsored-hidden-carousel')
+                ) {
+                    this.abort();
+                    return;
+                }
+                return origOpen.call(this, method, url, ...rest);
+            };
+        }
     }
 
     function removeSiteTelemetryBundle() {
@@ -1207,7 +1219,7 @@
 
     function removeSiteTelemetry(context = document) {
         const TRACKABLE_SELECTOR = '[trackableid], [trackablemoduleid]';
-        const TELEMETRY_ATTR_REGEX = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
+        const TELEMETRY_ATTRS_REGEX = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRS = new Set([
             '_sp', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
             'data-ebayui', 'data-operationid', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey',
@@ -1232,7 +1244,7 @@
             }
             for (const attr of el.attributes) {
                 const name = attr.name;
-                if (TELEMETRY_ATTRS.has(name) || TELEMETRY_ATTR_REGEX.some(rx => rx.test(name))) {
+                if (TELEMETRY_ATTRS.has(name) || TELEMETRY_ATTRS_REGEX.some(rx => rx.test(name))) {
                     el.removeAttribute(name);
                 }
             }
