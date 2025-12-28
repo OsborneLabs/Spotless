@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.3.1
+// @version      2.3.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -325,9 +325,6 @@
             .outbound-status-page:visited, .outbound-update-page:visited {
                 color: var(--color-text-link-default);
             }
-            .seller-linked:hover {
-                color: var(--color-text-link-ebay-hover) !important;
-            }
             .sponsored-highlight {
                 border: var(--size-thickness-highlight-border) dashed var(--color-highlight-border) !important;
                 background-color: var(--color-highlight-background);
@@ -340,6 +337,12 @@
             }
             .sponsored-hidden-carousel {
                 display: none !important;
+            }
+            .enhanced-seller-info {
+                text-decoration: none !important;
+            }
+            .enhanced-seller-info:hover {
+                color: var(--color-text-link-ebay-hover) !important;
             }
         `;
         document.head.appendChild(style);
@@ -683,7 +686,7 @@
                 ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
-                const fontFamilyMethod = detectSponsoredListingByFontFamily();
+                const fontFamilyMethod = detectSponsoredListingByFontGroup();
                 fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
             }
             if (detectedSponsoredElements.size === 0) {
@@ -715,7 +718,7 @@
                         }
                     }
                 }
-                createSellerLink();
+                enhanceSellerInfo();
                 removeSponsoredRibbons();
                 cleanListingURLs();
                 cleanGeneralURLs();
@@ -811,7 +814,7 @@
         return sponsoredGroup ? groupMap[sponsoredGroup] : [];
     }
 
-    function detectSponsoredListingByFontFamily() {
+    function detectSponsoredListingByFontGroup() {
         const listings = getListingElements();
         if (!listings.length) return new Set();
         const groups = new Map();
@@ -1030,62 +1033,6 @@
         });
     }
 
-    function createSellerLink() {
-        const listings = getListingElements();
-        const hostname = window.location.hostname.replace(/^www\./, "");
-        for (const listing of listings) {
-            const sellerElements = listing.querySelectorAll(
-                ".su-card-container__attributes__secondary .s-card__attribute-row," +
-                ".s-card__program-badge-container--sellerOrStoreInfo"
-            );
-            for (const container of sellerElements) {
-                let username, feedback, targetEl = container;
-                const spans = container.querySelectorAll("span.su-styled-text");
-                if (spans.length >= 2) {
-                    username = spans[0].textContent.trim();
-                    feedback = spans[1].textContent.trim();
-                    targetEl = spans[0].parentElement;
-                } else {
-                    const combined = container.querySelector("span.su-styled-text.default");
-                    if (!combined) continue;
-                    const parts = combined.textContent.trim().split(/\s{2,}/);
-                    if (parts.length < 2) continue;
-                    [username, feedback] = parts;
-                    const wrapper = document.createElement("span");
-                    wrapper.append(
-                        document.createElement("span"),
-                        " ",
-                        document.createElement("span")
-                    );
-                    wrapper.children[0].textContent = username;
-                    wrapper.children[1].textContent = feedback;
-                    combined.replaceWith(wrapper);
-                    targetEl = wrapper;
-                }
-                if (!username || targetEl.querySelector("a.seller-linked")) continue;
-                const link = document.createElement("a");
-                link.className = "seller-linked";
-                link.href = `https://${hostname}/usr/${encodeURIComponent(username)}`;
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.textContent = username;
-                link.style.cssText = `
-                    color: var(--color-foreground-primary);
-                    text-decoration: none;
-                `;
-                targetEl.firstChild?.replaceWith(link);
-                const feedbackNode = targetEl.children[1];
-                if (feedbackNode && feedbackNode.textContent === feedback) {
-                    const bullet = document.createElement("span");
-                    bullet.textContent = " · ";
-                    bullet.style.padding = "0 0.15em";
-                    targetEl.insertBefore(bullet, feedbackNode);
-                    feedbackNode.style.marginLeft = "0";
-                }
-            }
-        }
-    }
-
     function removeSponsoredBanners(root = document) {
         if (!(root instanceof Element || root instanceof Document)) {
             return;
@@ -1218,12 +1165,12 @@
     }
 
     function removeSiteTelemetry(context = document) {
-        const TRACKABLE_SELECTOR = '[trackableid], [trackablemoduleid]';
+        const TELEMETRY_ATTRS_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRS_REGEX = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRS = new Set([
             '_sp', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
-            'data-ebayui', 'data-operationid', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey',
-            'data-vi-scrolltracking', 'data-vi-tracking', 'modulemeta'
+            'data-ebayui', 'data-operationid', 'data-testid', 'data-track', 'data-tracking', 'data-uvcc',
+            'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'modulemeta'
         ]);
         for (const el of context.querySelectorAll('*')) {
             if (el.hasAttribute('data-viewport')) {
@@ -1233,11 +1180,11 @@
                     el.removeAttribute('data-view');
                     el.removeAttribute('id');
                 }
-                if (el.matches(TRACKABLE_SELECTOR)) {
+                if (el.matches(TELEMETRY_ATTRS_SELECTOR)) {
                     el.removeAttribute('trackableid');
                     el.removeAttribute('trackablemoduleid');
                 }
-                for (const t of el.querySelectorAll(TRACKABLE_SELECTOR)) {
+                for (const t of el.querySelectorAll(TELEMETRY_ATTRS_SELECTOR)) {
                     t.removeAttribute('trackableid');
                     t.removeAttribute('trackablemoduleid');
                 }
@@ -1259,14 +1206,14 @@
     }
 
     function removeSiteTelemetryScripts() {
-        const BLOCK_SCRIPT_REGEX = /https:\/\/ir\.ebaystatic\.com\/rs\/c\/\d+tracking\/configuration\.js/i;
+        const REMOVE_SCRIPTS_REGEX = /https:\/\/ir\.ebaystatic\.com\/rs\/c\/\d+tracking\/configuration\.js/i;
         const origCreateElement = Document.prototype.createElement;
         Document.prototype.createElement = function(tagName, options) {
             const el = origCreateElement.call(this, tagName, options);
             if (String(tagName).toLowerCase() === 'script') {
                 Object.defineProperty(el, 'src', {
                     set(value) {
-                        if (BLOCK_SCRIPT_REGEX.test(value)) {
+                        if (REMOVE_SCRIPTS_REGEX.test(value)) {
                             this.type = 'javascript/blocked';
                             return;
                         }
@@ -1292,6 +1239,69 @@
             },
             set(_) {}
         });
+    }
+
+    function enhanceSellerInfo() {
+        const listings = getListingElements();
+        const hostname = window.location.hostname.replace(/^www\./, "");
+        for (const listing of listings) {
+            const sellerElements = listing.querySelectorAll(
+                ".su-card-container__attributes__secondary .s-card__attribute-row," +
+                ".s-card__program-badge-container--sellerOrStoreInfo"
+            );
+            for (const container of sellerElements) {
+                let username, feedback, targetEl = container;
+                const spans = container.querySelectorAll("span.su-styled-text");
+                if (spans.length >= 2) {
+                    username = spans[0].textContent.trim();
+                    feedback = spans[1].textContent.trim();
+                    targetEl = spans[0].parentElement;
+                } else {
+                    const combined = container.querySelector("span.su-styled-text.default");
+                    if (!combined) continue;
+                    const parts = combined.textContent.trim().split(/\s{2,}/);
+                    if (parts.length < 2) continue;
+                    [username, feedback] = parts;
+                    const wrapper = document.createElement("span");
+                    const userSpan = document.createElement("span");
+                    const feedbackSpan = document.createElement("span");
+                    userSpan.textContent = username;
+                    feedbackSpan.textContent = feedback;
+                    wrapper.append(userSpan, " ", feedbackSpan);
+                    combined.replaceWith(wrapper);
+                    targetEl = wrapper;
+                }
+                if (!username) continue;
+                if (!targetEl.querySelector("a.enhanced-seller-info")) {
+                    const sellerLink = document.createElement("a");
+                    sellerLink.className = "enhanced-seller-info";
+                    sellerLink.href = `https://${hostname}/usr/${encodeURIComponent(username)}`;
+                    sellerLink.target = "_blank";
+                    sellerLink.rel = "noopener noreferrer";
+                    sellerLink.textContent = username;
+
+                    targetEl.firstChild?.replaceWith(sellerLink);
+                }
+                const feedbackNode = targetEl.children[1];
+                if (
+                    feedbackNode &&
+                    feedbackNode.textContent.trim() === feedback &&
+                    !feedbackNode.querySelector("a.enhanced-seller-info")
+                ) {
+                    const feedbackLink = document.createElement("a");
+                    feedbackLink.className = "enhanced-seller-info";
+                    feedbackLink.href = `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`;
+                    feedbackLink.target = "_blank";
+                    feedbackLink.rel = "noopener noreferrer";
+                    feedbackLink.textContent = feedback;
+                    feedbackNode.replaceWith(feedbackLink);
+                    const bullet = document.createElement("span");
+                    bullet.textContent = " · ";
+                    bullet.style.padding = "0 0.15em";
+                    targetEl.insertBefore(bullet, feedbackLink);
+                }
+            }
+        }
     }
 
     function designateSponsoredContent(el) {
@@ -1388,8 +1398,8 @@
     function cleanGeneralClutter() {
         const GENERAL_CLUTTER_ATTRS = [
             '.d-sell-now--filmstrip-margin', '.madrona-banner', '.s-faq-list', '.s-feedback',
-            '.x-goldin-module', '[class*="BOS_PLACEHOLDER"]', '[class*="EBAY_LIVE_ENTRY"]',
-            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
+            '.su-faqs', '.srp-river-answer--CAQ_PLACEHOLDER', '.x-goldin-module', '[class*="BOS_PLACEHOLDER"]',
+            '[class*="EBAY_LIVE_ENTRY"]', '[class*="FAQ_KW_SRP_MODULE"]', '[class*="START_LISTING_BANNER"]'
         ];
         const elements = document.querySelectorAll(GENERAL_CLUTTER_ATTRS.join(','));
         elements.forEach(el => el.remove());
