@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.1
+// @version      2.5.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1377,11 +1377,17 @@
 
     function disableSiteTelemetryNetworkRequests() {
         const TELEMETRY_NETWORK_BLOCKLIST = [
-            /:\/\/backstory\.ebay\./i, /:\/\/edgetrksvc\.ebay\./i, /:\/\/ebay\.com\/scl\/js\/scandalloader\.js/i,
-            /:\/\/ebaystatic\.com\/cr\/v\/.*\/logs.*\.bundle\.js/i, /:\/\/event\..*\.shoplive\.cloud/i,
-            /:\/\/ir\.ebaystatic\.com\/cr\/ebay-rum\//i, /:\/\/ir\.ebaystatic\.com\/rs\/c\/scandal\//i,
-            /:\/\/ir\.ebaystatic\.com\/rs\/c\/.*tracking\//i, /:\/\/secureir\.ebaystatic\.com\b/i,
-            /:\/\/(?:www\.)?ebayrtm\.com\b/i, /:\/\/pulsar\.ebay\.com/i
+            /:\/\/backstory\.ebay\./i,
+            /:\/\/edgetrksvc\.ebay\./i,
+            /:\/\/ebay\.com\/scl\/js\/scandalloader\.js/i,
+            /:\/\/ebaystatic\.com\/cr\/v\/.*\/logs.*\.bundle\.js/i,
+            /:\/\/event\..*\.shoplive\.cloud/i,
+            /:\/\/ir\.ebaystatic\.com\/cr\/ebay-rum\//i,
+            /:\/\/ir\.ebaystatic\.com\/rs\/c\/scandal\//i,
+            /:\/\/ir\.ebaystatic\.com\/rs\/c\/.*tracking\//i,
+            /:\/\/secureir\.ebaystatic\.com\b/i,
+            /:\/\/(?:www\.)?ebayrtm\.com\b/i,
+            /:\/\/pulsar\.ebay\.com/i
         ];
 
         function shouldBlock(url) {
@@ -1616,8 +1622,9 @@
     function cleanGeneralClutter() {
         const GENERAL_CLUTTER_SELECTORS = [
             '.d-sell-now--filmstrip-margin', '.dynamic-banner', '.madrona-banner', '.s-faq-list', '.s-feedback',
-            '.srp-bos-items', '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]',
-            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]', '[class*="BOS_PLACEHOLDER"]'
+            '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]',
+            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]',
+            '[class*="BOS_PLACEHOLDER"]'
         ];
         const elements = document.querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','));
         elements.forEach(el => el.remove());
