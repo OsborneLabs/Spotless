@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.2
+// @version      2.5.3
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -885,7 +885,7 @@
     }
 
     function detectSponsoredListingByHomoglyphLabel() {
-        const HOMOGLYPH_LABEL = {
+        const label = {
             'Ѕ': 's',
             'А': 'a',
             'Е': 'e',
@@ -901,7 +901,7 @@
         };
 
         function normalizeText(c) {
-            if (HOMOGLYPH_LABEL[c]) return HOMOGLYPH_LABEL[c];
+            if (label[c]) return label[c];
             return c
                 .normalize('NFKC')
                 .replace(/[\u200B-\u200D\u061C\uFEFF\u2063]/g, '')
@@ -1359,9 +1359,18 @@
                     t.removeAttribute('trackablemoduleid');
                 }
             }
-            for (const attr of el.attributes) {
+            const inSRPOverlay = isSRPProtectedUI(el);
+            for (const attr of Array.from(el.attributes)) {
                 const name = attr.name;
-                if (TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) || TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))) {
+                if (inSRPOverlay) {
+                    if (name === 'data-track' || name === 'data-view') {
+                        continue;
+                    }
+                }
+                if (
+                    TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
+                    TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
+                ) {
                     el.removeAttribute(name);
                 }
             }
@@ -1451,6 +1460,14 @@
             },
             set(_) {}
         });
+    }
+
+    function isSRPProtectedUI(el) {
+        return el.closest(
+            '.srp-refine__overlay,' +
+            '.srp-refine__drawer,' +
+            '[role="dialog"]'
+        );
     }
 
     function disableSiteTelemetry() {
