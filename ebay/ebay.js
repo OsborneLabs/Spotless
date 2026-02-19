@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.3
+// @version      2.5.4
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -36,12 +36,12 @@
 (function() {
     "use strict";
 
-    const APP_NAME = "Spotless";
-    const APP_NAME_DEBUG_MODE = "SPOTLESS FOR EBAY";
-    const APP_KEY_HIDE_SPONSORED_CONTENT = "hideSponsoredContent";
-    const APP_KEY_MINIMIZE_PANEL = "panelMinimized";
-    const APP_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
-    const APP_ICONS = {
+    const SCRIPT_NAME = "Spotless";
+    const SCRIPT_NAME_DEBUG = "SPOTLESS FOR EBAY";
+    const STORAGE_KEY_HIDE_SPONSORED = "hideSponsoredContent";
+    const STORAGE_KEY_PANEL_MINIMIZED = "panelMinimized";
+    const DETECT_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
+    const UI_ICON_SET = {
         locked: `<svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/></svg>`,
         unlocked: `<svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/></svg>`,
         arrow: `<svg id="arrowIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>`,
@@ -51,7 +51,7 @@
     const state = {
         ui: {
             bannerUpdateScheduled: false,
-            hidingEnabled: localStorage.getItem(APP_KEY_HIDE_SPONSORED_CONTENT) !== "false",
+            hidingEnabled: localStorage.getItem(STORAGE_KEY_HIDE_SPONSORED) !== "false",
             highlightedSponsoredContent: [],
             isContentProcessing: false,
             updateScheduled: false
@@ -537,13 +537,13 @@
         wrapper.appendChild(panelBox);
         document.body.appendChild(wrapper);
         const isPanelMinimized =
-            localStorage.getItem(APP_KEY_MINIMIZE_PANEL) === "true";
+            localStorage.getItem(STORAGE_KEY_PANEL_MINIMIZED) === "true";
         setPanelMinimized(isPanelMinimized);
         const minimizeButton = document.getElementById("minimizePanelButton");
         if (minimizeButton) {
             minimizeButton.addEventListener("click", () => {
                 const newState = !panelBox.classList.contains("minimized");
-                localStorage.setItem(APP_KEY_MINIMIZE_PANEL, String(newState));
+                localStorage.setItem(STORAGE_KEY_PANEL_MINIMIZED, String(newState));
                 setPanelMinimized(newState);
             });
         }
@@ -557,7 +557,7 @@
         }) => {
             const enabled = target.checked;
             state.ui.hidingEnabled = enabled;
-            localStorage.setItem(APP_KEY_HIDE_SPONSORED_CONTENT, String(enabled));
+            localStorage.setItem(STORAGE_KEY_HIDE_SPONSORED, String(enabled));
             updatePanelLockIcon();
             scheduleHighlightUpdate();
         });
@@ -569,12 +569,12 @@
         header.id = "panelHeader";
         header.innerHTML = `
             <div id="lockIconContainer">
-                ${APP_ICONS.locked}
-                ${APP_ICONS.unlocked}
+                ${UI_ICON_SET.locked}
+                ${UI_ICON_SET.unlocked}
             </div>
-            <h2 class="panel-title" aria-level="1">${APP_NAME}</h2>
+            <h2 class="panel-title" aria-level="1">${SCRIPT_NAME}</h2>
             <button id="minimizePanelButton" aria-label="Expands or minimizes the panel">
-                ${APP_ICONS.arrow}
+                ${UI_ICON_SET.arrow}
             </button>
         `;
         return header;
@@ -599,7 +599,7 @@
             href: "https://ko-fi.com/osbornelabs",
             target: "_blank",
             rel: "noopener noreferrer",
-            innerHTML: APP_ICONS.heart,
+            innerHTML: UI_ICON_SET.heart,
         });
         Object.assign(donateLink.style, {
             display: "inline-flex",
@@ -783,7 +783,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error(`${APP_NAME_DEBUG_MODE}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
+            console.error(`${SCRIPT_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
             state.ui.isContentProcessing = false;
             initMainObserver();
             return 0;
@@ -937,7 +937,7 @@
                 if (!letters.length) return;
 
                 if (
-                    APP_SPONSORED_KEYWORDS.some(keyword =>
+                    DETECT_SPONSORED_KEYWORDS.some(keyword =>
                         isSubsequence(letters, keyword)
                     )
                 ) {
@@ -1268,7 +1268,7 @@
             const title = carousel.querySelector('h2, h3, h4');
             if (
                 title &&
-                APP_SPONSORED_KEYWORDS.some(kw =>
+                DETECT_SPONSORED_KEYWORDS.some(kw =>
                     normalizeText(title.textContent).includes(kw)
                 )
             ) {
@@ -1278,7 +1278,7 @@
             const textElements = Array.from(carousel.querySelectorAll('div, span'));
             if (
                 textElements.some(el =>
-                    APP_SPONSORED_KEYWORDS.some(kw =>
+                    DETECT_SPONSORED_KEYWORDS.some(kw =>
                         normalizeText(el.textContent).includes(kw)
                     )
                 )
@@ -1291,7 +1291,7 @@
                 .filter(t => t.length === 1 && /^\p{L}$/u.test(t));
 
             if (
-                APP_SPONSORED_KEYWORDS.some(kw => {
+                DETECT_SPONSORED_KEYWORDS.some(kw => {
                     let i = 0;
                     for (const char of characters) {
                         if (char === kw[i]) {
@@ -1337,10 +1337,11 @@
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
-            'data-hscroll', 'data-uvcc', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
-            'data-ebayui', 'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
-            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view',
-            'modulemeta', 'onload', '_sp'
+            'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
+            'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui',
+            'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
+            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking',
+            'data-view', 'modulemeta', 'onload', 'trackable-id', '_sp'
         ]);
         for (const el of context.querySelectorAll('*')) {
             if (el.hasAttribute('data-viewport')) {
@@ -1662,7 +1663,7 @@
         newValue
     }) => {
         if (!key) return;
-        if (key === APP_KEY_HIDE_SPONSORED_CONTENT) {
+        if (key === STORAGE_KEY_HIDE_SPONSORED) {
             const isEnabled = newValue === "true";
             if (isEnabled === state.ui.hidingEnabled) return;
             state.ui.hidingEnabled = isEnabled;
@@ -1674,7 +1675,7 @@
             scheduleHighlightUpdate();
             return;
         }
-        if (key === APP_KEY_MINIMIZE_PANEL) {
+        if (key === STORAGE_KEY_PANEL_MINIMIZED) {
             setPanelMinimized(newValue === "true");
         }
     });
