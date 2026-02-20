@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.4
+// @version      2.5.5
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1337,11 +1337,10 @@
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
-            'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
-            'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui',
-            'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
-            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking',
-            'data-view', 'modulemeta', 'onload', 'trackable-id', '_sp'
+            'data-hscroll', 'data-uvcc', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
+            'data-ebayui', 'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
+            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view',
+            'modulemeta', 'onload', '_sp'
         ]);
         for (const el of context.querySelectorAll('*')) {
             if (el.hasAttribute('data-viewport')) {
