@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.6
+// @version      2.5.7
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1337,14 +1337,13 @@
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
-            'ads-tracking-metadata', 'data-hscroll', 'data-uvcc', 'data-click', 'data-clientpresentationmetadata',
-            'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions', 'data-listingid', 'data-operationid',
-            'data-pulsardata', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking',
-            'data-vi-tracking', 'data-view', 'modulemeta', 'onload', '_sp'
+            'data-hscroll', 'data-uvcc', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
+            'data-ebayui', 'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
+            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view',
+            'modulemeta', 'onload', '_sp'
         ]);
         for (const el of context.querySelectorAll('*')) {
-            const inSRPOverlay = isSRPProtectedUI(el);
-            if (!inSRPOverlay && el.hasAttribute('data-viewport')) {
+            if (el.hasAttribute('data-viewport')) {
                 el.setAttribute('data-viewport', '{}');
                 if (el.matches('li')) {
                     el.removeAttribute('data-listingid');
@@ -1360,28 +1359,26 @@
                     t.removeAttribute('trackablemoduleid');
                 }
             }
-            if (!inSRPOverlay) {
-                for (const attr of Array.from(el.attributes)) {
-                    const name = attr.name;
-                    if (
-                        TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
-                        TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
-                    ) {
-                        el.removeAttribute(name);
+            const inSRPOverlay = isSRPProtectedUI(el);
+            for (const attr of Array.from(el.attributes)) {
+                const name = attr.name;
+                if (inSRPOverlay) {
+                    if (name === 'data-track' || name === 'data-view') {
+                        continue;
                     }
                 }
+                if (
+                    TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
+                    TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
+                ) {
+                    el.removeAttribute(name);
+                }
             }
-            if (
-                !inSRPOverlay &&
-                el.tagName === 'INPUT' &&
-                el.type === 'hidden' &&
-                el.id &&
-                el.id.toLowerCase().startsWith('clientsideexperiments')
-            ) {
+            if (el.tagName === 'INPUT' && el.type === 'hidden' && el.id && el.id.toLowerCase().startsWith('clientsideexperiments')) {
                 el.remove();
                 continue;
             }
-            if (!inSRPOverlay && el.tagName === 'IMG' && el.hasAttribute('onerror')) {
+            if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
                 el.removeAttribute('onerror');
             }
         }
@@ -1467,8 +1464,7 @@
 
     function isSRPProtectedUI(el) {
         return el.closest(
-            '.srp-refine__overlay,' +
-            '.srp-refine__drawer,' +
+            '[class*="refine"],' +
             '[role="dialog"]'
         );
     }
