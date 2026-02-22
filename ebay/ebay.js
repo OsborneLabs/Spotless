@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.7
+// @version      2.5.8
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1337,83 +1337,114 @@
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
-            'data-hscroll', 'data-uvcc', 'data-click', 'data-clientpresentationmetadata', 'data-config', 'data-defertimer',
-            'data-ebayui', 'data-interactions', 'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid',
-            'data-track', 'data-tracking', 'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view',
-            'modulemeta', 'onload', '_sp'
+            'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
+            'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions',
+            'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking',
+            'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload', '_sp'
         ]);
-        for (const el of context.querySelectorAll('*')) {
-            if (el.hasAttribute('data-viewport')) {
-                el.setAttribute('data-viewport', '{}');
-                if (el.matches('li')) {
-                    el.removeAttribute('data-listingid');
-                    el.removeAttribute('data-view');
-                    el.removeAttribute('id');
+        let rootNodes;
+        if (isSearchResultsPage() && context === document) {
+            rootNodes = document.querySelectorAll(
+                '.srp-main, .srp-main-content, .x-header, .x-footer'
+            );
+        } else {
+            rootNodes = [context];
+        }
+        for (const root of rootNodes) {
+            const allNodes = root.querySelectorAll('*');
+            for (const el of allNodes) {
+                if (
+                    el.closest('[class*="refine"]') ||
+                    el.closest('[role="dialog"]')
+                ) {
+                    continue;
                 }
-                if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                    el.removeAttribute('trackableid');
-                    el.removeAttribute('trackablemoduleid');
+                if (el.hasAttribute('data-viewport')) {
+                    el.setAttribute('data-viewport', '{}');
+                    if (el.matches('li')) {
+                        el.removeAttribute('data-listingid');
+                        el.removeAttribute('data-view');
+                        el.removeAttribute('id');
+                    }
+                    if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                        el.removeAttribute('trackableid');
+                        el.removeAttribute('trackablemoduleid');
+                    }
+                    for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                        t.removeAttribute('trackableid');
+                        t.removeAttribute('trackablemoduleid');
+                    }
                 }
-                for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                    t.removeAttribute('trackableid');
-                    t.removeAttribute('trackablemoduleid');
-                }
-            }
-            const inSRPOverlay = isSRPProtectedUI(el);
-            for (const attr of Array.from(el.attributes)) {
-                const name = attr.name;
-                if (inSRPOverlay) {
-                    if (name === 'data-track' || name === 'data-view') {
-                        continue;
+                for (const attr of Array.from(el.attributes)) {
+                    const name = attr.name;
+                    if (
+                        TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
+                        TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
+                    ) {
+                        el.removeAttribute(name);
                     }
                 }
                 if (
-                    TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
-                    TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
+                    el.tagName === 'INPUT' &&
+                    el.type === 'hidden' &&
+                    el.id &&
+                    el.id.toLowerCase().startsWith('clientsideexperiments')
                 ) {
-                    el.removeAttribute(name);
+                    el.remove();
                 }
-            }
-            if (el.tagName === 'INPUT' && el.type === 'hidden' && el.id && el.id.toLowerCase().startsWith('clientsideexperiments')) {
-                el.remove();
-                continue;
-            }
-            if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
-                el.removeAttribute('onerror');
+                if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
+                    el.removeAttribute('onerror');
+                }
             }
         }
     }
 
     function disableSiteTelemetryNetworkRequests() {
         const TELEMETRY_NETWORK_BLOCKLIST = [
+            /:\/\/(?:www\.)?ebayrtm\.com\b/i,
             /:\/\/backstory\.ebay\./i,
-            /:\/\/edgetrksvc\.ebay\./i,
             /:\/\/ebay\.com\/scl\/js\/scandalloader\.js/i,
             /:\/\/ebaystatic\.com\/cr\/v\/.*\/logs.*\.bundle\.js/i,
+            /:\/\/edgetrksvc\.ebay\./i,
             /:\/\/event\..*\.shoplive\.cloud/i,
             /:\/\/ir\.ebaystatic\.com\/cr\/ebay-rum\//i,
-            /:\/\/ir\.ebaystatic\.com\/rs\/c\/scandal\//i,
             /:\/\/ir\.ebaystatic\.com\/rs\/c\/.*tracking\//i,
-            /:\/\/secureir\.ebaystatic\.com\b/i,
-            /:\/\/(?:www\.)?ebayrtm\.com\b/i,
-            /:\/\/pulsar\.ebay\.com/i
+            /:\/\/ir\.ebaystatic\.com\/rs\/c\/scandal\//i,
+            /:\/\/pulsar\.ebay\.com/i,
+            /:\/\/secureir\.ebaystatic\.com\b/i
         ];
+        const loggedDomains = new Set();
 
         function shouldBlock(url) {
             return typeof url === 'string' &&
-                TELEMETRY_NETWORK_BLOCKLIST.some(function(rx) {
-                    return rx.test(url);
-                });
+                TELEMETRY_NETWORK_BLOCKLIST.some(rx => rx.test(url));
+        }
+
+        function logOnce(url) {
+            try {
+                const domain = new URL(url).hostname;
+                if (!loggedDomains.has(domain)) {
+                    console.debug(`${SCRIPT_NAME_DEBUG} | BLOCKED TELEMETRY REQUEST:`, url);
+                    loggedDomains.add(domain);
+                }
+            } catch (e) {
+                console.debug(`${SCRIPT_NAME_DEBUG} | BLOCKED TELEMETRY REQUEST:`, url);
+            }
         }
         const origFetch = window.fetch;
         if (origFetch) {
             window.fetch = function(resource) {
-                const url = typeof resource === 'string' ? resource : resource && resource.url;
+                const url = typeof resource === 'string' ?
+                    resource :
+                    resource && resource.url;
+
                 if (shouldBlock(url)) {
-                    return Promise.resolve(new Response(null, {
-                        status: 204
-                    }));
+                    logOnce(url);
+                    return Promise.reject(
+                        new TypeError('blocked-telemetry-request')
+                    );
                 }
+
                 return origFetch.apply(this, arguments);
             };
         }
@@ -1422,19 +1453,14 @@
         XMLHttpRequest.prototype.open = function(method, url) {
             if (shouldBlock(url)) {
                 this.__telemetryBlocked = true;
+                this.__telemetryURL = url;
             }
             return origOpen.apply(this, arguments);
         };
         XMLHttpRequest.prototype.send = function() {
             if (this.__telemetryBlocked) {
-                this.readyState = 4;
-                this.status = 204;
-                if (typeof this.onreadystatechange === 'function') {
-                    this.onreadystatechange();
-                }
-                if (typeof this.onload === 'function') {
-                    this.onload();
-                }
+                logOnce(this.__telemetryURL);
+                this.abort();
                 return;
             }
             return origSend.apply(this, arguments);
@@ -1443,6 +1469,7 @@
             const origBeacon = navigator.sendBeacon;
             navigator.sendBeacon = function(url, data) {
                 if (shouldBlock(url)) {
+                    logOnce(url);
                     return true;
                 }
                 return origBeacon.apply(this, arguments);
@@ -1450,28 +1477,8 @@
         }
     }
 
-    function disableSiteTelemetrySRP() {
-        let inert = Object.create(null);
-        Object.defineProperty(window, 'SRP', {
-            configurable: false,
-            enumerable: true,
-            get() {
-                return inert;
-            },
-            set(_) {}
-        });
-    }
-
-    function isSRPProtectedUI(el) {
-        return el.closest(
-            '[class*="refine"],' +
-            '[role="dialog"]'
-        );
-    }
-
     function disableSiteTelemetry() {
         disableSiteTelemetryNetworkRequests(true);
-        disableSiteTelemetrySRP();
     }
 
     function enhancedSellerInfo() {
@@ -1639,8 +1646,7 @@
         const GENERAL_CLUTTER_SELECTORS = [
             '.d-sell-now--filmstrip-margin', '.dynamic-banner', '.madrona-banner', '.s-faq-list', '.s-feedback',
             '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]',
-            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]',
-            '[class*="BOS_PLACEHOLDER"]'
+            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
         ];
         const elements = document.querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','));
         elements.forEach(el => el.remove());
