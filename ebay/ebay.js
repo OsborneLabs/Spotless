@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.8
+// @version      2.5.9
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -38,6 +38,10 @@
 
     const SCRIPT_NAME = "Spotless";
     const SCRIPT_NAME_DEBUG = "SPOTLESS FOR EBAY";
+    const SCRIPT_VERSION =
+        typeof GM_info !== 'undefined' ?
+        GM_info.script.version :
+        'unknown';
     const STORAGE_KEY_HIDE_SPONSORED = "hideSponsoredContent";
     const STORAGE_KEY_PANEL_MINIMIZED = "panelMinimized";
     const DETECT_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
@@ -1340,7 +1344,8 @@
             'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
             'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions',
             'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking',
-            'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload', '_sp'
+            'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload',
+            'trackableid', '_sp'
         ]);
         let rootNodes;
         if (isSearchResultsPage() && context === document) {
@@ -1424,11 +1429,11 @@
             try {
                 const domain = new URL(url).hostname;
                 if (!loggedDomains.has(domain)) {
-                    console.debug(`${SCRIPT_NAME_DEBUG} | BLOCKED TELEMETRY REQUEST:`, url);
+                    console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - BLOCKED TELEMETRY REQUEST:`, url);
                     loggedDomains.add(domain);
                 }
             } catch (e) {
-                console.debug(`${SCRIPT_NAME_DEBUG} | BLOCKED TELEMETRY REQUEST:`, url);
+                console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - BLOCKED TELEMETRY REQUEST:`, url);
             }
         }
         const origFetch = window.fetch;
