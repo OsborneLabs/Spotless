@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.11
+// @version      2.5.12
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1345,7 +1345,7 @@
             'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions',
             'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking',
             'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload',
-            'trackableid', 'trackable-id'
+            'semantichints'
         ]);
         let rootNodes;
         if (isSearchResultsPage() && context === document) {
@@ -1358,12 +1358,7 @@
         for (const root of rootNodes) {
             const allNodes = root.querySelectorAll('*');
             for (const el of allNodes) {
-                if (
-                    el.closest('[class*="refine"]') ||
-                    el.closest('[role="dialog"]')
-                ) {
-                    continue;
-                }
+                if (el.closest('[class*="refine"]') || el.closest('[role="dialog"]')) continue;
                 if (el.hasAttribute('data-viewport')) {
                     el.setAttribute('data-viewport', '{}');
                     if (el.matches('li')) {
@@ -1382,19 +1377,11 @@
                 }
                 for (const attr of Array.from(el.attributes)) {
                     const name = attr.name;
-                    if (
-                        TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
-                        TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
-                    ) {
+                    if (TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) || TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))) {
                         el.removeAttribute(name);
                     }
                 }
-                if (
-                    el.tagName === 'INPUT' &&
-                    el.type === 'hidden' &&
-                    el.id &&
-                    el.id.toLowerCase().startsWith('clientsideexperiments')
-                ) {
+                if (el.tagName === 'INPUT' && el.type === 'hidden' && el.id && el.id.toLowerCase().startsWith('clientsideexperiments')) {
                     el.remove();
                 }
                 if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
@@ -1402,6 +1389,12 @@
                 }
             }
         }
+        const carousels = context.querySelectorAll('div.carousel');
+        carousels.forEach(carousel => {
+            carousel.querySelectorAll('aside[trackable-id]').forEach(aside => {
+                aside.removeAttribute('trackable-id');
+            });
+        });
     }
 
     function disableSiteTelemetryNetworkRequests() {
