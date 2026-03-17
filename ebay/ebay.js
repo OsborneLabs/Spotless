@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.9
+// @version      2.5.10
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -600,7 +600,7 @@
             textContent: " · ",
         });
         const donateLink = Object.assign(document.createElement("a"), {
-            href: "https://ko-fi.com/osbornelabs",
+            href: "https://ko-fi.com/OsborneLabs",
             target: "_blank",
             rel: "noopener noreferrer",
             innerHTML: UI_ICON_SET.heart,
@@ -1341,11 +1341,11 @@
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
-            'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
+            '_sp', 'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
             'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions',
             'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking',
             'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload',
-            'trackableid', '_sp'
+            'trackableid', 'trackable-id'
         ]);
         let rootNodes;
         if (isSearchResultsPage() && context === document) {
@@ -1573,7 +1573,7 @@
         const observer = state.observer.generalCleanupObserver;
         if (observer) observer.disconnect();
         const TRACKING_PARAM_BLOCKLIST = [
-            '_blrs', '_from', '_odkw', '_osacat', '_sacat', '_trksid', 'campaign', 'campid', 'cspheader', 'descgauge',
+            '_blrs', '_from', '_odkw', '_osacat', '_sacat', '_sop', '_trksid', 'campaign', 'campid', 'cspheader', 'descgauge',
             'domain', 'excSoj', 'excTrk', 'iid', 'item', 'lsite', 'mkcid', 'mkevt', 'mkrid', 'oneClk', 'promoted_items',
             'rt', 'sacat', 'secureDesc', 'siteid', 'source', 'sr', 'templateId', 'toolid'
         ];
