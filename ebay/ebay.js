@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.10
+// @version      2.5.11
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1573,7 +1573,7 @@
         const observer = state.observer.generalCleanupObserver;
         if (observer) observer.disconnect();
         const TRACKING_PARAM_BLOCKLIST = [
-            '_blrs', '_from', '_odkw', '_osacat', '_sacat', '_sop', '_trksid', 'campaign', 'campid', 'cspheader', 'descgauge',
+            '_blrs', '_from', '_odkw', '_osacat', '_sacat', '_trksid', 'campaign', 'campid', 'cspheader', 'descgauge',
             'domain', 'excSoj', 'excTrk', 'iid', 'item', 'lsite', 'mkcid', 'mkevt', 'mkrid', 'oneClk', 'promoted_items',
             'rt', 'sacat', 'secureDesc', 'siteid', 'source', 'sr', 'templateId', 'toolid'
         ];
