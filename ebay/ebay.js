@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.5.12
+// @version      2.6.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1347,54 +1347,95 @@
             'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload',
             'semantichints'
         ]);
-        let rootNodes;
-        if (isSearchResultsPage() && context === document) {
-            rootNodes = document.querySelectorAll(
-                '.srp-main, .srp-main-content, .x-header, .x-footer'
-            );
-        } else {
-            rootNodes = [context];
-        }
-        for (const root of rootNodes) {
-            const allNodes = root.querySelectorAll('*');
-            for (const el of allNodes) {
-                if (el.closest('[class*="refine"]') || el.closest('[role="dialog"]')) continue;
-                if (el.hasAttribute('data-viewport')) {
-                    el.setAttribute('data-viewport', '{}');
-                    if (el.matches('li')) {
-                        el.removeAttribute('data-listingid');
-                        el.removeAttribute('data-view');
-                        el.removeAttribute('id');
+
+        function runCleanup() {
+            let rootNodes;
+            if (isSearchResultsPage() && context === document) {
+                rootNodes = document.querySelectorAll(
+                    '.srp-main, .srp-main-content, .x-header, .x-footer'
+                );
+            } else {
+                rootNodes = [context];
+            }
+            for (const root of rootNodes) {
+                const allNodes = root.querySelectorAll('*');
+                for (const el of allNodes) {
+                    if (el.closest('[class*="refine"]') || el.closest('[role="dialog"]')) continue;
+                    if (el.hasAttribute('data-viewport')) {
+                        el.setAttribute('data-viewport', '{}');
+                        if (el.matches('li')) {
+                            el.removeAttribute('data-listingid');
+                            el.removeAttribute('data-view');
+                            el.removeAttribute('id');
+                        }
+                        if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                            el.removeAttribute('trackableid');
+                            el.removeAttribute('trackablemoduleid');
+                        }
+                        for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                            t.removeAttribute('trackableid');
+                            t.removeAttribute('trackablemoduleid');
+                        }
                     }
-                    if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                        el.removeAttribute('trackableid');
-                        el.removeAttribute('trackablemoduleid');
+                    for (const attr of Array.from(el.attributes)) {
+                        const name = attr.name;
+                        if (
+                            TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
+                            TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
+                        ) {
+                            el.removeAttribute(name);
+                        }
                     }
-                    for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                        t.removeAttribute('trackableid');
-                        t.removeAttribute('trackablemoduleid');
+                    if (
+                        el.tagName === 'INPUT' &&
+                        el.type === 'hidden' &&
+                        el.id &&
+                        el.id.toLowerCase().startsWith('clientsideexperiments')
+                    ) {
+                        el.remove();
                     }
-                }
-                for (const attr of Array.from(el.attributes)) {
-                    const name = attr.name;
-                    if (TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) || TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))) {
-                        el.removeAttribute(name);
+                    if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
+                        el.removeAttribute('onerror');
                     }
-                }
-                if (el.tagName === 'INPUT' && el.type === 'hidden' && el.id && el.id.toLowerCase().startsWith('clientsideexperiments')) {
-                    el.remove();
-                }
-                if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
-                    el.removeAttribute('onerror');
                 }
             }
-        }
-        const carousels = context.querySelectorAll('div.carousel');
-        carousels.forEach(carousel => {
-            carousel.querySelectorAll('aside[trackable-id]').forEach(aside => {
-                aside.removeAttribute('trackable-id');
+            const trackableAsides = context.querySelectorAll(
+                'div.carousel aside[trackable-id], .dp_banner_container[trackable-id]'
+            );
+            trackableAsides.forEach(el => {
+                el.removeAttribute('trackable-id');
             });
+        }
+        const INITIAL_DELAY = 1000;
+        const IDLE_TIMEOUT = 500;
+        const MAX_WAIT = 5000;
+        let idleTimer;
+        let maxTimer;
+        const observer = new MutationObserver(() => {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(finish, IDLE_TIMEOUT);
         });
+
+        function finish() {
+            observer.disconnect();
+            clearTimeout(maxTimer);
+            runCleanup();
+        }
+
+        function startObserving() {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            maxTimer = setTimeout(finish, MAX_WAIT);
+        }
+        if (document.readyState === 'complete') {
+            setTimeout(startObserving, INITIAL_DELAY);
+        } else {
+            window.addEventListener('load', () => {
+                setTimeout(startObserving, INITIAL_DELAY);
+            });
+        }
     }
 
     function disableSiteTelemetryNetworkRequests() {
