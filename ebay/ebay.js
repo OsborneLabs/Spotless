@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.6.0
+// @version      2.6.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1342,10 +1342,9 @@
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
         const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
             '_sp', 'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
-            'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-ebayui', 'data-interactions',
-            'data-listingid', 'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking',
-            'data-uvccoptoutkey', 'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload',
-            'semantichints'
+            'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-interactions', 'data-listingid',
+            'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey',
+            'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload', 'semantichints'
         ]);
 
         function runCleanup() {
@@ -1371,10 +1370,6 @@
                         if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
                             el.removeAttribute('trackableid');
                             el.removeAttribute('trackablemoduleid');
-                        }
-                        for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                            t.removeAttribute('trackableid');
-                            t.removeAttribute('trackablemoduleid');
                         }
                     }
                     for (const attr of Array.from(el.attributes)) {
@@ -1408,7 +1403,7 @@
         }
         const INITIAL_DELAY = 1000;
         const IDLE_TIMEOUT = 500;
-        const MAX_WAIT = 5000;
+        const MAX_WAIT = 3000;
         let idleTimer;
         let maxTimer;
         const observer = new MutationObserver(() => {
@@ -1429,12 +1424,19 @@
             });
             maxTimer = setTimeout(finish, MAX_WAIT);
         }
-        if (document.readyState === 'complete') {
-            setTimeout(startObserving, INITIAL_DELAY);
-        } else {
-            window.addEventListener('load', () => {
+        const shouldDelay = isSearchResultsPage();
+
+        function triggerStart() {
+            if (shouldDelay) {
                 setTimeout(startObserving, INITIAL_DELAY);
-            });
+            } else {
+                startObserving();
+            }
+        }
+        if (document.readyState === 'complete') {
+            triggerStart();
+        } else {
+            window.addEventListener('load', triggerStart);
         }
     }
 
