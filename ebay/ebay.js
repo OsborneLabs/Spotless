@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.6.1
+// @version      2.7.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -245,9 +245,10 @@
                 transition: transform 0.3s ease;
             }
             .heart-icon {
+                position: relative;
+                top: 1px;
                 width: 10px;
                 height: 10px;
-                vertical-align: middle;
                 fill: var(--color-app-icon);
             }
             .heart-icon:hover {
@@ -1340,103 +1341,98 @@
     function disableSiteTelemetryAttributes(context = document) {
         const TELEMETRY_ATTRIBUTES_SELECTOR = '[trackableid], [trackablemoduleid]';
         const TELEMETRY_ATTRIBUTES_REGEXES = [/^data-atf/i, /^data-gr\d$/i, /^data-s-[a-z0-9]+$/i];
-        const TELEMETRY_ATTRIBUTE_BLOCKLIST = new Set([
+        const TELEMETRY_ATTRIBUTES_BLOCKLIST = new Set([
             '_sp', 'ads-tracking-metadata', 'adstrackingmetadata', 'data-hscroll', 'data-uvcc', 'data-click',
             'data-clientpresentationmetadata', 'data-config', 'data-defertimer', 'data-interactions', 'data-listingid',
             'data-operationid', 'data-pulsardata', 'data-testid', 'data-track', 'data-tracking', 'data-uvccoptoutkey',
-            'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'onload', 'semantichints'
+            'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'moduleid', 'onload', 'semantichints',
+            'trackingcontext'
         ]);
-
-        function runCleanup() {
-            let rootNodes;
-            if (isSearchResultsPage() && context === document) {
-                rootNodes = document.querySelectorAll(
-                    '.srp-main, .srp-main-content, .x-header, .x-footer'
-                );
-            } else {
-                rootNodes = [context];
+        const RULES = [{
+                match: el =>
+                    el.hasAttribute('trackable-id') &&
+                    (el.closest('.carousel') || el.classList.contains('dp_banner_container')),
+                run: el => {
+                    el.removeAttribute('trackable-id');
+                }
+            },
+            {
+                match: el => el.hasAttribute('data-viewport'),
+                run: el => {
+                    const raw = el.getAttribute('data-viewport');
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && typeof parsed.trackableId === 'string') {
+                            parsed.trackableId = 'X'.repeat(parsed.trackableId.length);
+                        }
+                        el.setAttribute('data-viewport', JSON.stringify(parsed));
+                    } catch (e) {
+                        const cleaned = raw.replace(
+                            /("trackableId"\s*:\s*")([^"]+)(")/i,
+                            (_, start, id, end) => start + 'X'.repeat(id.length) + end
+                        );
+                        el.setAttribute('data-viewport', cleaned);
+                    }
+                    if (el.matches('li')) {
+                        el.removeAttribute('data-listingid');
+                        el.removeAttribute('data-view');
+                        el.removeAttribute('id');
+                    }
+                    if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                        el.removeAttribute('trackableid');
+                        el.removeAttribute('trackablemoduleid');
+                    }
+                    for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
+                        t.removeAttribute('trackableid');
+                        t.removeAttribute('trackablemoduleid');
+                    }
+                }
+            },
+            {
+                match: el =>
+                    el.tagName === 'INPUT' &&
+                    el.type === 'hidden' &&
+                    el.id &&
+                    el.id.toLowerCase().startsWith('clientsideexperiments'),
+                run: el => el.remove()
+            },
+            {
+                match: el => el.tagName === 'IMG' && el.hasAttribute('onerror'),
+                run: el => el.removeAttribute('onerror')
             }
-            for (const root of rootNodes) {
-                const allNodes = root.querySelectorAll('*');
-                for (const el of allNodes) {
-                    if (el.closest('[class*="refine"]') || el.closest('[role="dialog"]')) continue;
-                    if (el.hasAttribute('data-viewport')) {
-                        el.setAttribute('data-viewport', '{}');
-                        if (el.matches('li')) {
-                            el.removeAttribute('data-listingid');
-                            el.removeAttribute('data-view');
-                            el.removeAttribute('id');
-                        }
-                        if (el.matches(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                            el.removeAttribute('trackableid');
-                            el.removeAttribute('trackablemoduleid');
-                        }
+        ];
+        let rootNodes;
+        if (isSearchResultsPage() && context === document) {
+            rootNodes = document.querySelectorAll(
+                '.srp-main, .srp-main-content, .x-header, .x-footer'
+            );
+        } else {
+            rootNodes = [context];
+        }
+        for (const root of rootNodes) {
+            const allNodes = root.querySelectorAll('*');
+            for (const el of allNodes) {
+                if (
+                    el.closest('[class*="refine"]') ||
+                    el.closest('[role="dialog"]')
+                ) {
+                    continue;
+                }
+                for (const rule of RULES) {
+                    if (rule.match(el)) {
+                        rule.run(el);
                     }
-                    for (const attr of Array.from(el.attributes)) {
-                        const name = attr.name;
-                        if (
-                            TELEMETRY_ATTRIBUTE_BLOCKLIST.has(name) ||
-                            TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
-                        ) {
-                            el.removeAttribute(name);
-                        }
-                    }
+                }
+                for (const attr of Array.from(el.attributes)) {
+                    const name = attr.name;
                     if (
-                        el.tagName === 'INPUT' &&
-                        el.type === 'hidden' &&
-                        el.id &&
-                        el.id.toLowerCase().startsWith('clientsideexperiments')
+                        TELEMETRY_ATTRIBUTES_BLOCKLIST.has(name) ||
+                        TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
                     ) {
-                        el.remove();
-                    }
-                    if (el.tagName === 'IMG' && el.hasAttribute('onerror')) {
-                        el.removeAttribute('onerror');
+                        el.removeAttribute(name);
                     }
                 }
             }
-            const trackableAsides = context.querySelectorAll(
-                'div.carousel aside[trackable-id], .dp_banner_container[trackable-id]'
-            );
-            trackableAsides.forEach(el => {
-                el.removeAttribute('trackable-id');
-            });
-        }
-        const INITIAL_DELAY = 1000;
-        const IDLE_TIMEOUT = 500;
-        const MAX_WAIT = 3000;
-        let idleTimer;
-        let maxTimer;
-        const observer = new MutationObserver(() => {
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(finish, IDLE_TIMEOUT);
-        });
-
-        function finish() {
-            observer.disconnect();
-            clearTimeout(maxTimer);
-            runCleanup();
-        }
-
-        function startObserving() {
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-            maxTimer = setTimeout(finish, MAX_WAIT);
-        }
-        const shouldDelay = isSearchResultsPage();
-
-        function triggerStart() {
-            if (shouldDelay) {
-                setTimeout(startObserving, INITIAL_DELAY);
-            } else {
-                startObserving();
-            }
-        }
-        if (document.readyState === 'complete') {
-            triggerStart();
-        } else {
-            window.addEventListener('load', triggerStart);
         }
     }
 
@@ -1465,11 +1461,11 @@
             try {
                 const domain = new URL(url).hostname;
                 if (!loggedDomains.has(domain)) {
-                    console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - BLOCKED TELEMETRY REQUEST:`, url);
+                    console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - TELEMETRY REQUEST BLOCKED:`, url);
                     loggedDomains.add(domain);
                 }
             } catch (e) {
-                console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - BLOCKED TELEMETRY REQUEST:`, url);
+                console.debug(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - TELEMETRY REQUEST BLOCKED:`, url);
             }
         }
         const origFetch = window.fetch;
