@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.7.0
+// @version      2.7.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -355,16 +355,11 @@
     }
 
     async function init() {
-        observeURLMutation();
+        initScriptObservers();
         createStyles();
         buildPanel();
         updatePanelVisibility();
-        initGeneralCleanupObserver();
-        if (isSearchResultsPage()) {
-            initSponsoredBannerObserver();
-        }
         if (determineCarouselDetection()) {
-            initSponsoredCarouselObserver();
             removeSponsoredCarousels();
         }
         await processSponsoredContent();
@@ -431,6 +426,17 @@
         });
     }
 
+    function initScriptObservers() {
+        observeURLMutation();
+        initGeneralURLCleanupObserver();
+        if (isSearchResultsPage()) {
+            initSponsoredBannerObserver();
+        }
+        if (determineCarouselDetection()) {
+            initSponsoredCarouselObserver();
+        }
+    }
+
     function initMainObserver() {
         if (state.observer.mainObserverInitialized) return;
         observer.observe(document.body, {
@@ -438,6 +444,57 @@
             subtree: true,
         });
         state.observer.mainObserverInitialized = true;
+    }
+
+    function initSanitizeListingObserver() {
+        let idleHandle = null;
+        let timeoutHandle = null;
+        let hasRunOnce = false;
+
+        function scheduleTelemetryCleanup() {
+            if (idleHandle !== null || timeoutHandle !== null) return;
+            const MIN_DELAY = 3000;
+            const start = performance.now();
+
+            function run() {
+                idleHandle = null;
+                timeoutHandle = null;
+                hasRunOnce = true;
+                disableSiteTelemetryAttributes();
+            }
+
+            function ensureMinDelayThenRun() {
+                if (hasRunOnce) {
+                    run();
+                    return;
+                }
+                const elapsed = performance.now() - start;
+                if (elapsed >= MIN_DELAY) {
+                    run();
+                } else {
+                    timeoutHandle = setTimeout(run, MIN_DELAY - elapsed);
+                }
+            }
+            if ('requestIdleCallback' in window) {
+                idleHandle = requestIdleCallback(() => {
+                    ensureMinDelayThenRun();
+                }, {
+                    timeout: 3000
+                });
+            } else {
+                timeoutHandle = setTimeout(run, hasRunOnce ? 0 : MIN_DELAY);
+            }
+        }
+        const observer = new MutationObserver(() => {
+            cleanListingURLs();
+            scheduleTelemetryCleanup();
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['href'],
+        });
     }
 
     function initSponsoredBannerObserver() {
@@ -473,19 +530,7 @@
         carouselState.sponsoredCarouselObserver = observer;
     }
 
-    function initCleanListingObserver() {
-        const observer = new MutationObserver(() => {
-            cleanListingURLs();
-        });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['href'],
-        });
-    }
-
-    function initGeneralCleanupObserver() {
+    function initGeneralURLCleanupObserver() {
         if (state.observer.generalCleanupObserverInitialized) return;
         state.observer.generalCleanupObserverInitialized = true;
         const observer = new MutationObserver(() => {
@@ -1359,20 +1404,7 @@
             {
                 match: el => el.hasAttribute('data-viewport'),
                 run: el => {
-                    const raw = el.getAttribute('data-viewport');
-                    try {
-                        const parsed = JSON.parse(raw);
-                        if (parsed && typeof parsed.trackableId === 'string') {
-                            parsed.trackableId = 'X'.repeat(parsed.trackableId.length);
-                        }
-                        el.setAttribute('data-viewport', JSON.stringify(parsed));
-                    } catch (e) {
-                        const cleaned = raw.replace(
-                            /("trackableId"\s*:\s*")([^"]+)(")/i,
-                            (_, start, id, end) => start + 'X'.repeat(id.length) + end
-                        );
-                        el.setAttribute('data-viewport', cleaned);
-                    }
+                    el.setAttribute('data-viewport', '{}');
                     if (el.matches('li')) {
                         el.removeAttribute('data-listingid');
                         el.removeAttribute('data-view');
@@ -1382,9 +1414,10 @@
                         el.removeAttribute('trackableid');
                         el.removeAttribute('trackablemoduleid');
                     }
-                    for (const t of el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR)) {
-                        t.removeAttribute('trackableid');
-                        t.removeAttribute('trackablemoduleid');
+                    const tracked = el.querySelectorAll(TELEMETRY_ATTRIBUTES_SELECTOR);
+                    for (let i = 0; i < tracked.length; i++) {
+                        tracked[i].removeAttribute('trackableid');
+                        tracked[i].removeAttribute('trackablemoduleid');
                     }
                 }
             },
@@ -1404,7 +1437,7 @@
         let rootNodes;
         if (isSearchResultsPage() && context === document) {
             rootNodes = document.querySelectorAll(
-                '.srp-main, .srp-main-content, .x-header, .x-footer'
+                '.x-header, .srp-main, .srp-main-content, .x-footer'
             );
         } else {
             rootNodes = [context];
@@ -1418,13 +1451,15 @@
                 ) {
                     continue;
                 }
-                for (const rule of RULES) {
+                for (let i = 0; i < RULES.length; i++) {
+                    const rule = RULES[i];
                     if (rule.match(el)) {
                         rule.run(el);
                     }
                 }
-                for (const attr of Array.from(el.attributes)) {
-                    const name = attr.name;
+                const attrs = el.attributes;
+                for (let i = attrs.length - 1; i >= 0; i--) {
+                    const name = attrs[i].name;
                     if (
                         TELEMETRY_ATTRIBUTES_BLOCKLIST.has(name) ||
                         TELEMETRY_ATTRIBUTES_REGEXES.some(rx => rx.test(name))
@@ -1598,7 +1633,6 @@
                 }
             }
         });
-        disableSiteTelemetryAttributes();
     }
 
     function cleanGeneralURLs() {
@@ -1683,10 +1717,19 @@
         const GENERAL_CLUTTER_SELECTORS = [
             '.d-sell-now--filmstrip-margin', '.dynamic-banner', '.madrona-banner', '.s-faq-list', '.s-feedback',
             '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]',
-            '[class*="FAQ_KW_SRP_MODULE"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
+            '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
         ];
-        const elements = document.querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','));
-        elements.forEach(el => el.remove());
+        document
+            .querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','))
+            .forEach(el => el.remove());
+        document
+            .querySelectorAll('.dp-hero-live-event-module')
+            .forEach(hero => {
+                const container = hero.closest('.page-grid-container');
+                if (container) {
+                    container.remove();
+                }
+            });
     }
 
     const observer = new MutationObserver(() => {
@@ -1694,9 +1737,9 @@
         scheduleHighlightUpdate();
     });
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCleanListingObserver);
+        document.addEventListener('DOMContentLoaded', initSanitizeListingObserver);
     } else {
-        initCleanListingObserver();
+        initSanitizeListingObserver();
     }
 
     window.addEventListener("storage", ({
