@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.7.1
+// @version      2.7.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -338,10 +338,7 @@
             .sponsored-hidden {
                 display: none !important;
             }
-            .sponsored-hidden-banner {
-                display: none !important;
-            }
-            .sponsored-hidden-carousel {
+            .sponsored-hidden-banner, .sponsored-hidden-carousel {
                 display: none !important;
             }
             .enhanced-seller-info {
@@ -367,6 +364,7 @@
         requestIdleCallback(cleanGeneralURLs, {
             timeout: 1500
         });
+        repairSwitchButtons();
     }
 
     function isValidSearchResultsPage() {
@@ -399,31 +397,55 @@
         return isListingPage();
     }
 
-    function observeURLMutation() {
-        let previousURL = location.href;
-        const handleURLChange = () => {
-            const currentURL = location.href;
-            if (currentURL !== previousURL) {
-                previousURL = currentURL;
-                updatePanelVisibility();
-                scheduleHighlightUpdate();
-            }
-        };
-        ["pushState", "replaceState"].forEach(method => {
-            const original = history[method];
-            history[method] = function(...args) {
-                const result = original.apply(this, args);
-                handleURLChange();
-                return result;
+    function observeURLMutation({
+        onURLChange
+    } = {}) {
+        if (!window.__urlMutationObserver) {
+            let previousURL = location.href;
+            const listeners = new Set();
+            const handleURLChange = () => {
+                const currentURL = location.href;
+                if (currentURL !== previousURL) {
+                    previousURL = currentURL;
+                    for (const cb of listeners) {
+                        try {
+                            cb(currentURL);
+                        } catch (err) {
+                            console.error(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION}: LISTENER ERROR OCCURED\n`, err);
+                        }
+                    }
+                    updatePanelVisibility();
+                    scheduleHighlightUpdate();
+                }
             };
-        });
-        window.addEventListener("popstate", handleURLChange);
-        window.addEventListener("hashchange", handleURLChange);
-        const observer = new MutationObserver(handleURLChange);
-        observer.observe(document, {
-            subtree: true,
-            childList: true
-        });
+            ["pushState", "replaceState"].forEach(method => {
+                const original = history[method];
+                if (original.__isWrapped) return;
+
+                function wrapped(...args) {
+                    const result = original.apply(history, args);
+                    handleURLChange();
+                    return result;
+                }
+                wrapped.__isWrapped = true;
+                history[method] = wrapped;
+            });
+            window.addEventListener("popstate", handleURLChange);
+            window.addEventListener("hashchange", handleURLChange);
+            window.__urlMutationObserver = {
+                addListener(cb) {
+                    if (typeof cb === 'function') {
+                        listeners.add(cb);
+                    }
+                },
+                removeListener(cb) {
+                    listeners.delete(cb);
+                }
+            };
+        }
+        if (typeof onURLChange === 'function') {
+            window.__urlMutationObserver.addListener(onURLChange);
+        }
     }
 
     function initScriptObservers() {
@@ -447,43 +469,65 @@
     }
 
     function initSanitizeListingObserver() {
-        let idleHandle = null;
-        let timeoutHandle = null;
+        let cleanupTimer = null;
         let hasRunOnce = false;
+        let isInitialRunScheduled = false;
+        let lastRunTime = 0;
+        const THROTTLE_INTERVAL = 300;
+
+        function runCleanup() {
+            lastRunTime = performance.now();
+            disableSiteTelemetryAttributes();
+        }
+
+        function waitForDomSettled() {
+            let quietTimer = null;
+            let fallbackTimer = null;
+            let done = false;
+
+            function finish() {
+                if (done) return;
+                done = true;
+                observer.disconnect();
+                clearTimeout(quietTimer);
+                clearTimeout(fallbackTimer);
+                hasRunOnce = true;
+                runCleanup();
+            }
+            const observer = new MutationObserver(() => {
+                clearTimeout(quietTimer);
+                quietTimer = setTimeout(() => finish(), 200);
+            });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            fallbackTimer = setTimeout(() => finish(), 3000);
+        }
 
         function scheduleTelemetryCleanup() {
-            if (idleHandle !== null || timeoutHandle !== null) return;
-            const MIN_DELAY = 3000;
-            const start = performance.now();
+            if (!isSearchResultsPage()) {
+                runCleanup();
+                return;
+            }
+            if (!hasRunOnce) {
+                if (isInitialRunScheduled) return;
+                isInitialRunScheduled = true;
+                waitForDomSettled();
+                return;
+            }
+            const now = performance.now();
+            if (now - lastRunTime >= THROTTLE_INTERVAL) {
+                runCleanup();
+            }
+        }
 
-            function run() {
-                idleHandle = null;
-                timeoutHandle = null;
-                hasRunOnce = true;
-                disableSiteTelemetryAttributes();
-            }
-
-            function ensureMinDelayThenRun() {
-                if (hasRunOnce) {
-                    run();
-                    return;
-                }
-                const elapsed = performance.now() - start;
-                if (elapsed >= MIN_DELAY) {
-                    run();
-                } else {
-                    timeoutHandle = setTimeout(run, MIN_DELAY - elapsed);
-                }
-            }
-            if ('requestIdleCallback' in window) {
-                idleHandle = requestIdleCallback(() => {
-                    ensureMinDelayThenRun();
-                }, {
-                    timeout: 3000
-                });
-            } else {
-                timeoutHandle = setTimeout(run, hasRunOnce ? 0 : MIN_DELAY);
-            }
+        function resetDelayState() {
+            clearTimeout(cleanupTimer);
+            cleanupTimer = null;
+            hasRunOnce = false;
+            isInitialRunScheduled = false;
+            lastRunTime = 0;
         }
         const observer = new MutationObserver(() => {
             cleanListingURLs();
@@ -495,6 +539,9 @@
             attributes: true,
             attributeFilter: ['href'],
         });
+        return {
+            resetDelayState
+        };
     }
 
     function initSponsoredBannerObserver() {
@@ -833,7 +880,7 @@
             });
             return detectedSponsoredElements.size;
         } catch (err) {
-            console.error(`${SCRIPT_NAME_DEBUG}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
+            console.error(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION}: UNABLE TO PROCESS SPONSORED CONTENT, SEE CONSOLE ERROR\n`, err);
             state.ui.isContentProcessing = false;
             initMainObserver();
             return 0;
@@ -1393,7 +1440,7 @@
             'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'moduleid', 'onload', 'semantichints',
             'trackingcontext'
         ]);
-        const RULES = [{
+        const RULESET = [{
                 match: el =>
                     el.hasAttribute('trackable-id') &&
                     (el.closest('.carousel') || el.classList.contains('dp_banner_container')),
@@ -1451,8 +1498,8 @@
                 ) {
                     continue;
                 }
-                for (let i = 0; i < RULES.length; i++) {
-                    const rule = RULES[i];
+                for (let i = 0; i < RULESET.length; i++) {
+                    const rule = RULESET[i];
                     if (rule.match(el)) {
                         rule.run(el);
                     }
@@ -1591,7 +1638,6 @@
                     sellerLink.target = "_blank";
                     sellerLink.rel = "noopener noreferrer";
                     sellerLink.textContent = username;
-
                     targetEl.firstChild?.replaceWith(sellerLink);
                 }
                 const feedbackNode = targetEl.children[1];
@@ -1614,6 +1660,26 @@
                 }
             }
         }
+    }
+
+    function repairSwitchButtons() {
+        document.addEventListener("click", function(e) {
+            const button = e.target.closest(".switch__button");
+            if (!button) return;
+            const container = button.closest(".filter__menu--switch");
+            if (!container) return;
+            const input = container.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            e.preventDefault();
+            e.stopPropagation();
+            input.checked = !input.checked;
+            input.dispatchEvent(new Event("input", {
+                bubbles: true
+            }));
+            input.dispatchEvent(new Event("change", {
+                bubbles: true
+            }));
+        });
     }
 
     function cleanListingURLs() {
