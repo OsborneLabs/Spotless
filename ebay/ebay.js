@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.7.2
+// @version      2.8.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -943,42 +943,43 @@
     }
 
     function detectSponsoredListingByAriaGroup() {
-        function generateAriaGroupLabel(num) {
-            let letters = '';
-            do {
-                letters = String.fromCharCode(65 + (num % 26)) + letters;
-                num = Math.floor(num / 26) - 1;
-            } while (num >= 0);
-            return letters;
-        }
         const listings = getListingElements();
-        const groupMap = {};
-        const ariaLabelToGroup = {};
-        let groupCounter = 0;
-        listings.forEach(listing => {
-            const labelSpan = listing.querySelector('span[aria-labelledby]');
-            if (!labelSpan) return;
-            const ariaLabel = labelSpan.getAttribute('aria-labelledby');
-            if (!ariaLabel || !ariaLabel.includes("s-")) return;
-            if (!ariaLabelToGroup[ariaLabel]) {
-                ariaLabelToGroup[ariaLabel] = `Group ${generateAriaGroupLabel(groupCounter)}`;
-                groupCounter++;
-            }
-            const group = ariaLabelToGroup[ariaLabel];
-            if (!groupMap[group]) {
-                groupMap[group] = [];
-            }
-            groupMap[group].push(listing);
+        if (!listings.length) return [];
+        const tokenMap = new Map();
+        listings.forEach((listing) => {
+            const el = listing.querySelector('.s-card__sep span[aria-labelledby]');
+            if (!el) return;
+            const aria = el.getAttribute('aria-labelledby');
+            if (!aria) return;
+            const tokens = aria.split(/\s+/).filter(t => t.startsWith('s-'));
+            tokens.forEach(token => {
+                if (!tokenMap.has(token)) tokenMap.set(token, []);
+                tokenMap.get(token).push(listing);
+            });
         });
-        let sponsoredGroup = null;
-        let minCount = Infinity;
-        for (const [group, listings] of Object.entries(groupMap)) {
-            if (listings.length < minCount) {
-                sponsoredGroup = group;
-                minCount = listings.length;
-            }
+        const groups = [...tokenMap.entries()]
+            .map(([token, arr]) => ({
+                token,
+                count: arr.length,
+                items: arr
+            }))
+            .sort((a, b) => a.count - b.count);
+        if (!groups.length) return [];
+        const counts = groups.map(g => g.count);
+        const min = counts[0];
+        const second = counts[1] ?? min;
+        let selectedGroups;
+        if (second >= min * 2) {
+            selectedGroups = [groups[0]];
+        } else {
+            const threshold = min * 1.5;
+            selectedGroups = groups.filter(g => g.count <= threshold);
         }
-        return sponsoredGroup ? groupMap[sponsoredGroup] : [];
+        const resultSet = new Set();
+        selectedGroups.forEach(g => {
+            g.items.forEach(listing => resultSet.add(listing));
+        });
+        return Array.from(resultSet);
     }
 
     function detectSponsoredListingByHomoglyphLabel() {

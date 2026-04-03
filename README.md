@@ -23,8 +23,8 @@ Spotless runs on these sites
       </a>
     </td>
     <td>
-      <img src="https://img.shields.io/badge/Version-v2.7.2-blue?style=for-the-badge">
-      <img src="https://img.shields.io/badge/Status-Down-red?style=for-the-badge">
+      <img src="https://img.shields.io/badge/Version-v2.8.0-blue?style=for-the-badge">
+      <img src="https://img.shields.io/badge/Status-Stable-brightgreen?style=for-the-badge">
     </td>
   </tr>
 </table>
