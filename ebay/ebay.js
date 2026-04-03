@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.8.0
+// @version      2.8.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -820,36 +820,25 @@
     async function processSponsoredContent() {
         if (state.ui.isContentProcessing) return 0;
         state.ui.isContentProcessing = true;
-
         try {
             observer.disconnect();
             resetSponsoredContent();
             const detectedSponsoredElements = new Set();
             const separatorSizeMethod = detectSponsoredListingBySeparatorSize();
+            const ariaGroupMethod = detectSponsoredListingByAriaGroup();
             separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
-            if (detectedSponsoredElements.size === 0) {
-                const ariaGroupMethod = detectSponsoredListingByAriaGroup();
-                ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
+            ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
             if (detectedSponsoredElements.size === 0) {
                 const homoglyphLabelMethod = detectSponsoredListingByHomoglyphLabel();
                 homoglyphLabelMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
                 const fontFamilyMethod = detectSponsoredListingByFontGroup();
                 fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
                 const translateYMethod = detectSponsoredListingByTranslateY();
                 translateYMethod.forEach(li => detectedSponsoredElements.add(li));
-            }
-            if (detectedSponsoredElements.size === 0) {
                 const invertMethod = detectSponsoredListingByInvertStyle();
                 if (invertMethod?.elements) {
                     invertMethod.elements.forEach(li => detectedSponsoredElements.add(li));
                 }
-            }
-            if (detectedSponsoredElements.size === 0) {
                 const svgMethod = await detectSponsoredListingBySVG();
                 svgMethod.forEach(el => {
                     const li = el.closest("li");
@@ -927,19 +916,18 @@
 
     function detectSponsoredListingBySeparatorSize() {
         const listings = getListingElements();
-        const sponsoredListings = [];
+        const result = [];
         listings.forEach(listing => {
-            const separatorSpan = listing.querySelector('span.s-item__sep');
-            if (!separatorSpan) return;
-            const innerSpan = separatorSpan.querySelector('span');
-            const width = innerSpan?.offsetWidth || 0;
-            const height = innerSpan?.offsetHeight || 0;
-            const isSponsored = width > 0 && height > 0;
-            if (isSponsored) {
-                sponsoredListings.push(listing);
+            const el = listing.querySelector('.s-card__sep span[aria-labelledby]');
+            if (!el) return;
+            const inner = el.querySelector('span');
+            if (!inner) return;
+            const rect = inner.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                result.push(listing);
             }
         });
-        return sponsoredListings;
+        return result;
     }
 
     function detectSponsoredListingByAriaGroup() {
