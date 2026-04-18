@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.8.1
+// @version      2.8.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -470,68 +470,66 @@
 
     function initSanitizeListingObserver() {
         let cleanupTimer = null;
-        let hasRunOnce = false;
-        let isInitialRunScheduled = false;
-        let lastRunTime = 0;
-        const THROTTLE_INTERVAL = 300;
+        let settleObserver = null;
+        let quietTimer = null;
+        let fallbackTimer = null;
+
+        function getAdaptiveDelay() {
+            const navEntry = performance.getEntriesByType('navigation')[0];
+            if (navEntry && navEntry.type === 'back_forward') {
+                return 300;
+            }
+            return 150;
+        }
 
         function runCleanup() {
-            lastRunTime = performance.now();
             disableSiteTelemetryAttributes();
         }
 
-        function waitForDomSettled() {
-            let quietTimer = null;
-            let fallbackTimer = null;
+        function scheduleAfterDomSettled() {
+            if (settleObserver) {
+                clearTimeout(quietTimer);
+                quietTimer = setTimeout(finish, 200);
+                return;
+            }
             let done = false;
 
             function finish() {
                 if (done) return;
                 done = true;
-                observer.disconnect();
+                settleObserver.disconnect();
+                settleObserver = null;
                 clearTimeout(quietTimer);
                 clearTimeout(fallbackTimer);
-                hasRunOnce = true;
-                runCleanup();
+                const delay = getAdaptiveDelay();
+                setTimeout(() => {
+                    runCleanup();
+                }, delay);
             }
-            const observer = new MutationObserver(() => {
+            settleObserver = new MutationObserver(() => {
                 clearTimeout(quietTimer);
-                quietTimer = setTimeout(() => finish(), 200);
+                quietTimer = setTimeout(finish, 200);
             });
-            observer.observe(document.body, {
+            settleObserver.observe(document.body, {
                 childList: true,
                 subtree: true
             });
-            fallbackTimer = setTimeout(() => finish(), 3000);
-        }
-
-        function scheduleTelemetryCleanup() {
-            if (!isSearchResultsPage()) {
-                runCleanup();
-                return;
-            }
-            if (!hasRunOnce) {
-                if (isInitialRunScheduled) return;
-                isInitialRunScheduled = true;
-                waitForDomSettled();
-                return;
-            }
-            const now = performance.now();
-            if (now - lastRunTime >= THROTTLE_INTERVAL) {
-                runCleanup();
-            }
+            quietTimer = setTimeout(finish, 200);
+            fallbackTimer = setTimeout(finish, 3000);
         }
 
         function resetDelayState() {
             clearTimeout(cleanupTimer);
-            cleanupTimer = null;
-            hasRunOnce = false;
-            isInitialRunScheduled = false;
-            lastRunTime = 0;
+            if (settleObserver) {
+                settleObserver.disconnect();
+                settleObserver = null;
+            }
+            clearTimeout(quietTimer);
+            clearTimeout(fallbackTimer);
         }
         const observer = new MutationObserver(() => {
             cleanListingURLs();
-            scheduleTelemetryCleanup();
+            scheduleAfterDomSettled();
         });
         observer.observe(document.body, {
             childList: true,
