@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.8.2
+// @version      2.8.3
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -468,28 +468,122 @@
         state.observer.mainObserverInitialized = true;
     }
 
-    function initSanitizeListingObserver() {
-        let cleanupTimer = null;
+    function initSanitizePageObserver() {
         let settleObserver = null;
         let quietTimer = null;
         let fallbackTimer = null;
+        let pendingRequests = 0;
+        let networkIdleTimer = null;
+        let cleanupStats = [];
+        let summaryTimer = null;
+
+        function scheduleSummaryPrint() {
+            clearTimeout(summaryTimer);
+            summaryTimer = setTimeout(() => {
+                if (!cleanupStats.length) return;
+                const total = cleanupStats.length;
+                const avgDelay =
+                    cleanupStats.reduce((a, b) => a + b.actual, 0) / total;
+                const avgExec =
+                    cleanupStats.reduce((a, b) => a + b.exec, 0) / total;
+                const maxDelay = Math.max(...cleanupStats.map(s => s.actual));
+                const maxExec = Math.max(...cleanupStats.map(s => s.exec));
+                const padRuns = (n) => String(n).padStart(2, '0');
+                const padMetric = (n) => {
+                    const [int, dec] = n.toFixed(2).split('.');
+                    return `${int.padStart(4, '0')}.${dec}`;
+                };
+                console.log(
+                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY - ` +
+                    `RUNS: ${padRuns(total)} | ` +
+                    `AVG DELAY: ${padMetric(avgDelay)}ms | ` +
+                    `MAX DELAY: ${padMetric(maxDelay)}ms | ` +
+                    `AVG EXEC: ${padMetric(avgExec)}ms | ` +
+                    `MAX EXEC: ${padMetric(maxExec)}ms`
+                );
+                cleanupStats = [];
+            }, 1000);
+        }
+        const origFetch = window.fetch;
+        window.fetch = async (...args) => {
+            pendingRequests++;
+            try {
+                return await origFetch(...args);
+            } finally {
+                pendingRequests--;
+            }
+        };
+        const origXHR = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(...args) {
+            pendingRequests++;
+            this.addEventListener('loadend', () => {
+                pendingRequests--;
+            });
+            return origXHR.apply(this, args);
+        };
+
+        function waitForNetworkIdle(callback, timeout = 5000) {
+            const start = performance.now();
+
+            function check() {
+                if (pendingRequests === 0) {
+                    clearTimeout(networkIdleTimer);
+                    networkIdleTimer = setTimeout(callback, 300);
+                } else if (performance.now() - start < timeout) {
+                    setTimeout(check, 100);
+                } else {
+                    callback();
+                }
+            }
+            check();
+        }
 
         function getAdaptiveDelay() {
             const navEntry = performance.getEntriesByType('navigation')[0];
             if (navEntry && navEntry.type === 'back_forward') {
-                return 300;
+                return 350;
             }
-            return 150;
+            return 250;
         }
 
-        function runCleanup() {
+        function runCleanupWithLogging(label, scheduledAt, expectedDelay) {
+            const actualStart = performance.now();
+            const delayElapsed = actualStart - scheduledAt;
+            const execStart = performance.now();
             disableSiteTelemetryAttributes();
+            const execTime = performance.now() - execStart;
+            cleanupStats.push({
+                label,
+                expected: expectedDelay,
+                actual: delayElapsed,
+                exec: execTime
+            });
+            scheduleSummaryPrint();
+        }
+
+        function runCleanupPhases() {
+            const base = getAdaptiveDelay();
+            const phases = [
+                base,
+                base + 600,
+                base + 1400
+            ];
+            phases.forEach((delay, i) => {
+                const scheduledAt = performance.now();
+                setTimeout(() => {
+                    runCleanupWithLogging(
+                        `PHASE ${i + 1}`,
+                        scheduledAt,
+                        delay
+                    );
+                }, delay);
+            });
         }
 
         function scheduleAfterDomSettled() {
             if (settleObserver) {
                 clearTimeout(quietTimer);
-                quietTimer = setTimeout(finish, 200);
+                quietTimer = setTimeout(finish, 400);
                 return;
             }
             let done = false;
@@ -501,32 +595,26 @@
                 settleObserver = null;
                 clearTimeout(quietTimer);
                 clearTimeout(fallbackTimer);
-                const delay = getAdaptiveDelay();
-                setTimeout(() => {
-                    runCleanup();
-                }, delay);
+                waitForNetworkIdle(() => {
+                    runCleanupPhases();
+                });
             }
             settleObserver = new MutationObserver(() => {
                 clearTimeout(quietTimer);
-                quietTimer = setTimeout(finish, 200);
+                quietTimer = setTimeout(finish, 400);
             });
             settleObserver.observe(document.body, {
                 childList: true,
                 subtree: true
             });
-            quietTimer = setTimeout(finish, 200);
-            fallbackTimer = setTimeout(finish, 3000);
+            quietTimer = setTimeout(finish, 400);
+            fallbackTimer = setTimeout(finish, 4000);
         }
-
-        function resetDelayState() {
-            clearTimeout(cleanupTimer);
-            if (settleObserver) {
-                settleObserver.disconnect();
-                settleObserver = null;
-            }
-            clearTimeout(quietTimer);
-            clearTimeout(fallbackTimer);
-        }
+        window.addEventListener('load', () => {
+            waitForNetworkIdle(() => {
+                runCleanupPhases();
+            });
+        });
         const observer = new MutationObserver(() => {
             cleanListingURLs();
             scheduleAfterDomSettled();
@@ -537,6 +625,15 @@
             attributes: true,
             attributeFilter: ['href'],
         });
+
+        function resetDelayState() {
+            if (settleObserver) {
+                settleObserver.disconnect();
+                settleObserver = null;
+            }
+            clearTimeout(quietTimer);
+            clearTimeout(fallbackTimer);
+        }
         return {
             resetDelayState
         };
@@ -1790,9 +1887,9 @@
         scheduleHighlightUpdate();
     });
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSanitizeListingObserver);
+        document.addEventListener('DOMContentLoaded', initSanitizePageObserver);
     } else {
-        initSanitizeListingObserver();
+        initSanitizePageObserver();
     }
 
     window.addEventListener("storage", ({
