@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.8.3
+// @version      2.9.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -49,6 +49,7 @@
         locked: `<svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/></svg>`,
         unlocked: `<svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/></svg>`,
         arrow: `<svg id="arrowIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>`,
+        update: `<svg class="update-icon" xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 22 22"><path d="M5.7 9c.4-2 2.2-3.5 4.3-3.5 1.5 0 2.7.7 3.5 1.8l1.7-2C14 3.9 12.1 3 10 3 6.5 3 3.6 5.6 3.1 9H1l3.5 4L8 9H5.7zm9.8-2L12 11h2.3c-.5 2-2.2 3.5-4.3 3.5-1.5 0-2.7-.7-3.5-1.8l-1.7 1.9C6 16.1 7.9 17 10 17c3.5 0 6.4-2.6 6.9-6H19l-3.5-4z" fill="currentColor" transform="scale(1.08) translate(-0.7 -0.7)"/></svg>`,
         heart: `<svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
     };
 
@@ -82,8 +83,8 @@
                 --color-highlight-background: rgba(255, 230, 230, 0.30);
                 --color-highlight-border: #D95C5C;
                 --color-panel-divider: rgba(255, 255, 255, 0.1);
-                --color-panel-row: rgba(20, 30, 45, 0.5);
-                --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+                --color-panel-row: rgba(20, 30, 45, 0.50);
+                --color-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
                 --color-panel: rgba(34, 50, 70, 0.85);
                 --color-text-link-ebay-hover: #2854D9;
                 --color-text-link-panel-default: var(--color-text-link-panel-hover);
@@ -244,6 +245,19 @@
                 fill: var(--color-app-icon);
                 transition: transform 0.3s ease;
             }
+            .update-icon {
+                position: relative;
+                top: 1px;
+                width: 13px;
+                height: 13px;
+                color: var(--color-app-icon);
+                transition: transform 0.45s ease, color 0.25s ease;
+                transform-origin: center;
+            }
+            .update-icon:hover {
+                transform: rotate(180deg);
+                color: var(--color-text-link-panel-hover);
+            }
             .heart-icon {
                 position: relative;
                 top: 1px;
@@ -356,6 +370,7 @@
         createStyles();
         buildPanel();
         updatePanelVisibility();
+        repairSiteButtons();
         if (determineCarouselDetection()) {
             removeSponsoredCarousels();
         }
@@ -364,7 +379,6 @@
         requestIdleCallback(cleanGeneralURLs, {
             timeout: 1500
         });
-        repairSwitchButtons();
     }
 
     function isValidSearchResultsPage() {
@@ -469,13 +483,24 @@
     }
 
     function initSanitizePageObserver() {
+        const CONFIG = {
+            DOM_QUIET_MS: 900,
+            FALLBACK_MS: 6000,
+            NETWORK_IDLE_POLL_MS: 100,
+            NETWORK_IDLE_GRACE_MS: 350,
+            NETWORK_IDLE_TIMEOUT_MS: 8000,
+            RAF_STABILIZATION_FRAMES: 2,
+            PHASE_SPACING_MS: [0, 500, 1200],
+            SUMMARY_PRINT_MS: 1000,
+            COLD_LOAD_EXTRA_DELAY_MS: 500,
+            WARM_LOAD_EXTRA_DELAY_MS: 150,
+        };
         let settleObserver = null;
         let quietTimer = null;
         let fallbackTimer = null;
-        let pendingRequests = 0;
-        let networkIdleTimer = null;
-        let cleanupStats = [];
         let summaryTimer = null;
+        let pendingRequests = 0;
+        let cleanupStats = [];
 
         function scheduleSummaryPrint() {
             clearTimeout(summaryTimer);
@@ -488,8 +513,8 @@
                     cleanupStats.reduce((a, b) => a + b.exec, 0) / total;
                 const maxDelay = Math.max(...cleanupStats.map(s => s.actual));
                 const maxExec = Math.max(...cleanupStats.map(s => s.exec));
-                const padRuns = (n) => String(n).padStart(2, '0');
-                const padMetric = (n) => {
+                const padRuns = n => String(n).padStart(2, '0');
+                const padMetric = n => {
                     const [int, dec] = n.toFixed(2).split('.');
                     return `${int.padStart(4, '0')}.${dec}`;
                 };
@@ -502,48 +527,105 @@
                     `MAX EXEC: ${padMetric(maxExec)}ms`
                 );
                 cleanupStats = [];
-            }, 1000);
+            }, CONFIG.SUMMARY_PRINT_MS);
+        }
+
+        function trackRequestStart() {
+            pendingRequests++;
+        }
+
+        function trackRequestEnd() {
+            pendingRequests = Math.max(0, pendingRequests - 1);
         }
         const origFetch = window.fetch;
         window.fetch = async (...args) => {
-            pendingRequests++;
+            trackRequestStart();
             try {
                 return await origFetch(...args);
             } finally {
-                pendingRequests--;
+                trackRequestEnd();
             }
         };
-        const origXHR = XMLHttpRequest.prototype.open;
+        const origXHROpen = XMLHttpRequest.prototype.open;
+        const origXHRSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.open = function(...args) {
-            pendingRequests++;
-            this.addEventListener('loadend', () => {
-                pendingRequests--;
-            });
-            return origXHR.apply(this, args);
+            this.__spotlessTracked = false;
+            return origXHROpen.apply(this, args);
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+            if (!this.__spotlessTracked) {
+                this.__spotlessTracked = true;
+                trackRequestStart();
+                this.addEventListener(
+                    'loadend',
+                    () => {
+                        trackRequestEnd();
+                    }, {
+                        once: true
+                    }
+                );
+            }
+            return origXHRSend.apply(this, args);
         };
 
-        function waitForNetworkIdle(callback, timeout = 5000) {
-            const start = performance.now();
-
-            function check() {
-                if (pendingRequests === 0) {
-                    clearTimeout(networkIdleTimer);
-                    networkIdleTimer = setTimeout(callback, 300);
-                } else if (performance.now() - start < timeout) {
-                    setTimeout(check, 100);
-                } else {
-                    callback();
-                }
-            }
-            check();
+        function wait(ms) {
+            return new Promise(resolve => {
+                setTimeout(resolve, ms);
+            });
         }
 
-        function getAdaptiveDelay() {
-            const navEntry = performance.getEntriesByType('navigation')[0];
-            if (navEntry && navEntry.type === 'back_forward') {
-                return 350;
+        function nextFrame() {
+            return new Promise(resolve => {
+                requestAnimationFrame(resolve);
+            });
+        }
+        async function stabilizeFrames(count) {
+            for (let i = 0; i < count; i++) {
+                await nextFrame();
             }
-            return 250;
+        }
+
+        function isColdLoad() {
+            const nav = performance.getEntriesByType('navigation')[0];
+            if (!nav) return true;
+            return (
+                nav.type === 'navigate' ||
+                nav.transferSize > 0
+            );
+        }
+
+        function getAdaptiveGraceDelay() {
+            const connection =
+                navigator.connection ||
+                navigator.mozConnection ||
+                navigator.webkitConnection;
+            let delay = isColdLoad() ?
+                CONFIG.COLD_LOAD_EXTRA_DELAY_MS :
+                CONFIG.WARM_LOAD_EXTRA_DELAY_MS;
+            if (connection) {
+                switch (connection.effectiveType) {
+                    case '2g':
+                        delay += 1200;
+                        break;
+                    case '3g':
+                        delay += 500;
+                        break;
+                }
+            }
+            return delay;
+        }
+        async function waitForNetworkIdle() {
+            const start = performance.now();
+            while (
+                pendingRequests > 0 &&
+                performance.now() - start < CONFIG.NETWORK_IDLE_TIMEOUT_MS
+            ) {
+                await wait(CONFIG.NETWORK_IDLE_POLL_MS);
+            }
+            await stabilizeFrames(CONFIG.RAF_STABILIZATION_FRAMES);
+            await wait(CONFIG.NETWORK_IDLE_GRACE_MS);
+            await stabilizeFrames(CONFIG.RAF_STABILIZATION_FRAMES);
+            await wait(getAdaptiveGraceDelay());
         }
 
         function runCleanupWithLogging(label, scheduledAt, expectedDelay) {
@@ -562,58 +644,59 @@
         }
 
         function runCleanupPhases() {
-            const base = getAdaptiveDelay();
-            const phases = [
-                base,
-                base + 600,
-                base + 1400
-            ];
-            phases.forEach((delay, i) => {
+            CONFIG.PHASE_SPACING_MS.forEach((delay, index) => {
                 const scheduledAt = performance.now();
                 setTimeout(() => {
                     runCleanupWithLogging(
-                        `PHASE ${i + 1}`,
+                        `PHASE ${index + 1}`,
                         scheduledAt,
                         delay
                     );
                 }, delay);
             });
         }
+        async function finalizeDomSettled() {
+            await waitForNetworkIdle();
+            runCleanupPhases();
+        }
 
         function scheduleAfterDomSettled() {
             if (settleObserver) {
                 clearTimeout(quietTimer);
-                quietTimer = setTimeout(finish, 400);
+                quietTimer = setTimeout(() => {
+                    finalize();
+                }, CONFIG.DOM_QUIET_MS);
                 return;
             }
             let done = false;
-
-            function finish() {
+            async function finalize() {
                 if (done) return;
                 done = true;
                 settleObserver.disconnect();
                 settleObserver = null;
                 clearTimeout(quietTimer);
                 clearTimeout(fallbackTimer);
-                waitForNetworkIdle(() => {
-                    runCleanupPhases();
-                });
+                await finalizeDomSettled();
             }
             settleObserver = new MutationObserver(() => {
                 clearTimeout(quietTimer);
-                quietTimer = setTimeout(finish, 400);
+                quietTimer = setTimeout(() => {
+                    finalize();
+                }, CONFIG.DOM_QUIET_MS);
             });
             settleObserver.observe(document.body, {
                 childList: true,
                 subtree: true
             });
-            quietTimer = setTimeout(finish, 400);
-            fallbackTimer = setTimeout(finish, 4000);
+            quietTimer = setTimeout(() => {
+                finalize();
+            }, CONFIG.DOM_QUIET_MS);
+            fallbackTimer = setTimeout(() => {
+                finalize();
+            }, CONFIG.FALLBACK_MS);
         }
-        window.addEventListener('load', () => {
-            waitForNetworkIdle(() => {
-                runCleanupPhases();
-            });
+        window.addEventListener('load', async () => {
+            await finalizeDomSettled();
         });
         const observer = new MutationObserver(() => {
             cleanListingURLs();
@@ -787,6 +870,17 @@
         const separator = Object.assign(document.createElement("span"), {
             textContent: " · ",
         });
+        const updateLink = Object.assign(document.createElement("a"), {
+            href: "https://greasyfork.org/en/scripts/541981-spotless-for-ebay",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            innerHTML: UI_ICON_SET.update,
+        });
+        Object.assign(updateLink.style, {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+        });
         const donateLink = Object.assign(document.createElement("a"), {
             href: "https://ko-fi.com/OsborneLabs",
             target: "_blank",
@@ -798,7 +892,7 @@
             alignItems: "center",
             justifyContent: "center",
         });
-        footer.append(creatorLink, separator, donateLink);
+        footer.append(creatorLink, separator, updateLink, donateLink);
         return footer;
     }
 
@@ -924,8 +1018,8 @@
             separatorSizeMethod.forEach(li => detectedSponsoredElements.add(li));
             ariaGroupMethod.forEach(li => detectedSponsoredElements.add(li));
             if (detectedSponsoredElements.size === 0) {
-                const homoglyphLabelMethod = detectSponsoredListingByHomoglyphLabel();
-                homoglyphLabelMethod.forEach(li => detectedSponsoredElements.add(li));
+                const homoglyphMethod = detectSponsoredListingByHomoglyph();
+                homoglyphMethod.forEach(li => detectedSponsoredElements.add(li));
                 const fontFamilyMethod = detectSponsoredListingByFontGroup();
                 fontFamilyMethod.forEach(li => detectedSponsoredElements.add(li));
                 const translateYMethod = detectSponsoredListingByTranslateY();
@@ -1065,7 +1159,7 @@
         return Array.from(resultSet);
     }
 
-    function detectSponsoredListingByHomoglyphLabel() {
+    function detectSponsoredListingByHomoglyph() {
         const label = {
             'Ѕ': 's',
             'А': 'a',
@@ -1746,7 +1840,7 @@
         }
     }
 
-    function repairSwitchButtons() {
+    function repairSiteButtons() {
         document.addEventListener("click", function(e) {
             const button = e.target.closest(".switch__button");
             if (!button) return;
@@ -1865,9 +1959,9 @@
 
     function cleanGeneralClutter() {
         const GENERAL_CLUTTER_SELECTORS = [
-            '.d-sell-now--filmstrip-margin', '.dynamic-banner', '.madrona-banner', '.s-faq-list', '.s-feedback',
-            '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]',
-            '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
+            '.d-sell-now--filmstrip-margin', '.dp-ads-module-container', '.dynamic-banner', '.madrona-banner',
+            '.s-faq-list', '.s-feedback', '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module',
+            '[class*="EBAY_LIVE_ENTRY"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
         ];
         document
             .querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','))
