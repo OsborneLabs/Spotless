@@ -2,7 +2,7 @@
 <h1 align=center>Spotless</h1><br>
 
 ## Sites
-Spotless runs on these sites
+Spotless runs here
 
 ### eBay
 
@@ -23,7 +23,7 @@ Spotless runs on these sites
       </a>
     </td>
     <td>
-      <img src="https://img.shields.io/badge/Version-v2.9.0-blue?style=for-the-badge">
+      <img src="https://img.shields.io/badge/Version-v2.9.1-blue?style=for-the-badge">
       <img src="https://img.shields.io/badge/Status-Stable-brightgreen?style=for-the-badge">
     </td>
   </tr>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.9.0
+// @version      2.9.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -38,10 +38,7 @@
 
     const SCRIPT_NAME = "Spotless";
     const SCRIPT_NAME_DEBUG = "SPOTLESS FOR EBAY";
-    const SCRIPT_VERSION =
-        typeof GM_info !== 'undefined' ?
-        GM_info.script.version :
-        'unknown';
+    const SCRIPT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : 'unknown';
     const STORAGE_KEY_HIDE_SPONSORED = "hideSponsoredContent";
     const STORAGE_KEY_PANEL_MINIMIZED = "panelMinimized";
     const DETECT_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
@@ -492,7 +489,7 @@
             RAF_STABILIZATION_FRAMES: 2,
             PHASE_SPACING_MS: [0, 500, 1200],
             SUMMARY_PRINT_MS: 1000,
-            COLD_LOAD_EXTRA_DELAY_MS: 500,
+            COLD_LOAD_EXTRA_DELAY_MS: 600,
             WARM_LOAD_EXTRA_DELAY_MS: 150,
         };
         let settleObserver = null;
@@ -655,12 +652,12 @@
                 }, delay);
             });
         }
-        async function finalizeDomSettled() {
+        async function finalizeDOMSettled() {
             await waitForNetworkIdle();
             runCleanupPhases();
         }
 
-        function scheduleAfterDomSettled() {
+        function scheduleAfterDOMSettled() {
             if (settleObserver) {
                 clearTimeout(quietTimer);
                 quietTimer = setTimeout(() => {
@@ -676,7 +673,7 @@
                 settleObserver = null;
                 clearTimeout(quietTimer);
                 clearTimeout(fallbackTimer);
-                await finalizeDomSettled();
+                await finalizeDOMSettled();
             }
             settleObserver = new MutationObserver(() => {
                 clearTimeout(quietTimer);
@@ -696,11 +693,11 @@
             }, CONFIG.FALLBACK_MS);
         }
         window.addEventListener('load', async () => {
-            await finalizeDomSettled();
+            await finalizeDOMSettled();
         });
         const observer = new MutationObserver(() => {
             cleanListingURLs();
-            scheduleAfterDomSettled();
+            scheduleAfterDOMSettled();
         });
         observer.observe(document.body, {
             childList: true,
@@ -848,7 +845,7 @@
                 ${UI_ICON_SET.unlocked}
             </div>
             <h2 class="panel-title" aria-level="1">${SCRIPT_NAME}</h2>
-            <button id="minimizePanelButton" aria-label="Expands or minimizes the panel">
+            <button id="minimizePanelButton" aria-label="Expands or minimizes the Spotless panel">
                 ${UI_ICON_SET.arrow}
             </button>
         `;
