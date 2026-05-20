@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      2.9.1
+// @version      2.9.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -46,23 +46,23 @@
         locked: `<svg class="lock-icon lock-icon-animation" id="lockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C9.79 2 8 3.79 8 6v4H7c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V6c0-2.21-1.79-4-4-4zm-2 8V6c0-1.1.9-2 2-2s2 .9 2 2v4h-4z"/></svg>`,
         unlocked: `<svg class="lock-icon lock-icon-animation" id="unlockedIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 8V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H7c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1z"/></svg>`,
         arrow: `<svg id="arrowIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>`,
-        update: `<svg class="update-icon" xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 22 22"><path d="M5.7 9c.4-2 2.2-3.5 4.3-3.5 1.5 0 2.7.7 3.5 1.8l1.7-2C14 3.9 12.1 3 10 3 6.5 3 3.6 5.6 3.1 9H1l3.5 4L8 9H5.7zm9.8-2L12 11h2.3c-.5 2-2.2 3.5-4.3 3.5-1.5 0-2.7-.7-3.5-1.8l-1.7 1.9C6 16.1 7.9 17 10 17c3.5 0 6.4-2.6 6.9-6H19l-3.5-4z" fill="currentColor" transform="scale(1.08) translate(-0.7 -0.7)"/></svg>`,
+        repeat: `<svg class="repeat-icon" xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 22 22"><path d="M5.7 9c.4-2 2.2-3.5 4.3-3.5 1.5 0 2.7.7 3.5 1.8l1.7-2C14 3.9 12.1 3 10 3 6.5 3 3.6 5.6 3.1 9H1l3.5 4L8 9H5.7zm9.8-2L12 11h2.3c-.5 2-2.2 3.5-4.3 3.5-1.5 0-2.7-.7-3.5-1.8l-1.7 1.9C6 16.1 7.9 17 10 17c3.5 0 6.4-2.6 6.9-6H19l-3.5-4z" fill="currentColor" transform="scale(1.08) translate(-0.7 -0.7)"/></svg>`,
         heart: `<svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
     };
 
     const state = {
         ui: {
-            bannerUpdateScheduled: false,
             hidingEnabled: localStorage.getItem(STORAGE_KEY_HIDE_SPONSORED) !== "false",
             highlightedSponsoredContent: [],
+            bannerUpdateScheduled: false,
             isContentProcessing: false,
             updateScheduled: false
         },
         observer: {
             generalCleanupObserver: null,
+            sponsoredCarouselObserver: null,
             generalCleanupObserverInitialized: false,
             mainObserverInitialized: false,
-            sponsoredCarouselObserver: null,
             sponsoredCarouselObserverInitialized: false
         }
     };
@@ -242,7 +242,7 @@
                 fill: var(--color-app-icon);
                 transition: transform 0.3s ease;
             }
-            .update-icon {
+            .repeat-icon {
                 position: relative;
                 top: 1px;
                 width: 13px;
@@ -251,7 +251,7 @@
                 transition: transform 0.45s ease, color 0.25s ease;
                 transform-origin: center;
             }
-            .update-icon:hover {
+            .repeat-icon:hover {
                 transform: rotate(180deg);
                 color: var(--color-text-link-panel-hover);
             }
@@ -489,15 +489,30 @@
             RAF_STABILIZATION_FRAMES: 2,
             PHASE_SPACING_MS: [0, 500, 1200],
             SUMMARY_PRINT_MS: 1000,
-            COLD_LOAD_EXTRA_DELAY_MS: 600,
+            COLD_LOAD_EXTRA_DELAY_MS: 800,
             WARM_LOAD_EXTRA_DELAY_MS: 150,
         };
+        const LOAD_TYPE = (() => {
+            const nav = performance.getEntriesByType('navigation')[0];
+            if (!nav) {
+                return 'COLD';
+            }
+            switch (nav.type) {
+                case 'reload':
+                case 'back_forward':
+                    return 'WARM';
+                case 'navigate':
+                default:
+                    return 'COLD';
+            }
+        })();
         let settleObserver = null;
         let quietTimer = null;
         let fallbackTimer = null;
         let summaryTimer = null;
         let pendingRequests = 0;
         let cleanupStats = [];
+        let cleanupInProgress = false;
 
         function scheduleSummaryPrint() {
             clearTimeout(summaryTimer);
@@ -508,15 +523,19 @@
                     cleanupStats.reduce((a, b) => a + b.actual, 0) / total;
                 const avgExec =
                     cleanupStats.reduce((a, b) => a + b.exec, 0) / total;
-                const maxDelay = Math.max(...cleanupStats.map(s => s.actual));
-                const maxExec = Math.max(...cleanupStats.map(s => s.exec));
-                const padRuns = n => String(n).padStart(2, '0');
+                const maxDelay =
+                    Math.max(...cleanupStats.map(s => s.actual));
+                const maxExec =
+                    Math.max(...cleanupStats.map(s => s.exec));
+                const padRuns = n =>
+                    String(n).padStart(2, '0');
                 const padMetric = n => {
                     const [int, dec] = n.toFixed(2).split('.');
                     return `${int.padStart(4, '0')}.${dec}`;
                 };
                 console.log(
-                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY - ` +
+                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY · ` +
+                    `LOAD: ${LOAD_TYPE} | ` +
                     `RUNS: ${padRuns(total)} | ` +
                     `AVG DELAY: ${padMetric(avgDelay)}ms | ` +
                     `MAX DELAY: ${padMetric(maxDelay)}ms | ` +
@@ -583,12 +602,7 @@
         }
 
         function isColdLoad() {
-            const nav = performance.getEntriesByType('navigation')[0];
-            if (!nav) return true;
-            return (
-                nav.type === 'navigate' ||
-                nav.transferSize > 0
-            );
+            return LOAD_TYPE === 'COLD';
         }
 
         function getAdaptiveGraceDelay() {
@@ -627,10 +641,12 @@
 
         function runCleanupWithLogging(label, scheduledAt, expectedDelay) {
             const actualStart = performance.now();
-            const delayElapsed = actualStart - scheduledAt;
+            const delayElapsed =
+                actualStart - scheduledAt;
             const execStart = performance.now();
             disableSiteTelemetryAttributes();
-            const execTime = performance.now() - execStart;
+            const execTime =
+                performance.now() - execStart;
             cleanupStats.push({
                 label,
                 expected: expectedDelay,
@@ -653,27 +669,35 @@
             });
         }
         async function finalizeDOMSettled() {
-            await waitForNetworkIdle();
-            runCleanupPhases();
+            if (cleanupInProgress) return;
+            cleanupInProgress = true;
+            try {
+                await waitForNetworkIdle();
+                runCleanupPhases();
+            } finally {
+                cleanupInProgress = false;
+            }
         }
 
         function scheduleAfterDOMSettled() {
+            let done = false;
+            async function finalize() {
+                if (done) return;
+                done = true;
+                if (settleObserver) {
+                    settleObserver.disconnect();
+                    settleObserver = null;
+                }
+                clearTimeout(quietTimer);
+                clearTimeout(fallbackTimer);
+                await finalizeDOMSettled();
+            }
             if (settleObserver) {
                 clearTimeout(quietTimer);
                 quietTimer = setTimeout(() => {
                     finalize();
                 }, CONFIG.DOM_QUIET_MS);
                 return;
-            }
-            let done = false;
-            async function finalize() {
-                if (done) return;
-                done = true;
-                settleObserver.disconnect();
-                settleObserver = null;
-                clearTimeout(quietTimer);
-                clearTimeout(fallbackTimer);
-                await finalizeDOMSettled();
             }
             settleObserver = new MutationObserver(() => {
                 clearTimeout(quietTimer);
@@ -699,12 +723,22 @@
             cleanListingURLs();
             scheduleAfterDOMSettled();
         });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['href'],
-        });
+
+        function startObservers() {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['href'],
+            });
+        }
+        if (document.body) {
+            startObservers();
+        } else {
+            window.addEventListener('DOMContentLoaded', startObservers, {
+                once: true
+            });
+        }
 
         function resetDelayState() {
             if (settleObserver) {
@@ -871,7 +905,7 @@
             href: "https://greasyfork.org/en/scripts/541981-spotless-for-ebay",
             target: "_blank",
             rel: "noopener noreferrer",
-            innerHTML: UI_ICON_SET.update,
+            innerHTML: UI_ICON_SET.repeat,
         });
         Object.assign(updateLink.style, {
             display: "inline-flex",
@@ -1697,6 +1731,7 @@
         const TELEMETRY_NETWORK_BLOCKLIST = [
             /:\/\/(?:www\.)?ebayrtm\.com\b/i,
             /:\/\/backstory\.ebay\./i,
+            /:\/\/devicebind\.ebay\./i,
             /:\/\/ebay\.com\/scl\/js\/scandalloader\.js/i,
             /:\/\/ebaystatic\.com\/cr\/v\/.*\/logs.*\.bundle\.js/i,
             /:\/\/edgetrksvc\.ebay\./i,
