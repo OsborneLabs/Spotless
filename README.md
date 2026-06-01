@@ -1,4 +1,4 @@
-<p align=center><img src="https://cdn-icons-png.flaticon.com/512/10464/10464776.png" width="90" height="90"></p>
+<p align=center><img src="https://raw.githubusercontent.com/gist/OsborneLabs/469bbd47959f6400126f69550bfc65d4/raw/7d6a082b686d43e64e953f91e46a12ccf3ba6a21/Spotless.svg" width="90" height="90"></p>
 <h1 align=center>Spotless</h1><br>
 
 ## Sites
