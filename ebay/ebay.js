@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.0.0
+// @version      3.0.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -430,6 +430,8 @@
                 fill: var(--color-app-icon-default);
             }
             .error-text-container {
+                position: relative;
+                right: 10px;
                 flex: 0 0 55%;
                 text-align: left;
                 line-height: 1.2;
@@ -1754,7 +1756,7 @@
                 labelSponsored(carousel);
                 return;
             }
-            const textElements = Array.from(carousel.querySelectorAll('div, span'));
+            const textElements = Array.from(carousel.querySelectorAll('div, span, p'));
             if (
                 textElements.some(el =>
                     DETECT_SPONSORED_KEYWORDS.some(kw =>
