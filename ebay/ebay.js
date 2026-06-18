@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.0.1
+// @version      3.1.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1710,12 +1710,14 @@
             .normalize("NFKC")
             .replace(/[\u200B-\u200D\u061C\uFEFF]/g, '')
             .toLowerCase();
+        const mediaSelector = 'video, audio, source';
+        const removeMediaElements = root => root.querySelectorAll?.(mediaSelector).forEach(el => el.remove());
         const labelSponsored = carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             carousel.classList.add('sponsored-hidden-carousel');
             disableSiteTelemetryAttributes(carousel);
             carousel.style.display = 'none';
-            carousel.querySelectorAll('video, audio, source').forEach(el => el.remove());
+            removeMediaElements(carousel);
             carousel.querySelectorAll('[data-src], [data-video-src]').forEach(el => {
                 el.removeAttribute('data-src');
                 el.removeAttribute('data-video-src');
@@ -1724,12 +1726,11 @@
                 for (const m of mutations) {
                     for (const node of m.addedNodes) {
                         if (!(node instanceof HTMLElement)) continue;
-                        if (node.matches?.('video, audio, source')) {
+                        if (node.matches?.(mediaSelector)) {
                             node.remove();
-                            continue;
+                        } else {
+                            removeMediaElements(node);
                         }
-                        node.querySelectorAll?.('video, audio, source')
-                            .forEach(n => n.remove());
                     }
                 }
             });
@@ -1738,74 +1739,46 @@
                 subtree: true
             });
         };
-        document
-            .querySelectorAll('[class*="x-atc-layer"][class*="--ads"]')
-            .forEach(el => el.remove());
-
-        const carousels = document.querySelectorAll('[data-viewport]');
-        carousels.forEach(carousel => {
+        document.querySelectorAll('script').forEach(script => {
+            const text = script.textContent || '';
+            if (['LIVE_EVENTS_VIDEO_CAROUSEL', '"uxComponentGroup":"LIVE_EVENTS_VIDEO_CAROUSEL"', '"name":"LIVE_EVENTS_VIDEO_CAROUSEL"'].some(str => text.includes(str))) {
+                script.closest('.x-rx-slot-btf, .vim-ds6, [class*="x-rx-slot-btf"]')?.remove();
+            }
+        });
+        document.querySelectorAll('[class*="x-atc-layer"][class*="--ads"]').forEach(el => el.remove());
+        document.querySelectorAll('[data-viewport]').forEach(carousel => {
             if (carousel.classList.contains('sponsored-hidden-carousel')) return;
             if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
             const title = carousel.querySelector('h2, h3, h4');
-            if (
-                title &&
-                DETECT_SPONSORED_KEYWORDS.some(kw =>
-                    normalizeText(title.textContent).includes(kw)
-                )
-            ) {
-                labelSponsored(carousel);
-                return;
-            }
+            const normalizedTitle = title ? normalizeText(title.textContent) : '';
             const textElements = Array.from(carousel.querySelectorAll('div, span, p'));
-            if (
-                textElements.some(el =>
-                    DETECT_SPONSORED_KEYWORDS.some(kw =>
-                        normalizeText(el.textContent).includes(kw)
-                    )
-                )
-            ) {
-                labelSponsored(carousel);
-                return;
-            }
-            const characters = textElements
-                .map(el => normalizeText(el.textContent))
-                .filter(t => t.length === 1 && /^\p{L}$/u.test(t));
-
-            if (
-                DETECT_SPONSORED_KEYWORDS.some(kw => {
-                    let i = 0;
-                    for (const char of characters) {
-                        if (char === kw[i]) {
-                            if (++i === kw.length) return true;
-                        }
-                    }
-                    return false;
-                })
-            ) {
+            const normalizedTexts = textElements.map(el => normalizeText(el.textContent));
+            const characters = normalizedTexts.filter(t => t.length === 1 && /^\p{L}$/u.test(t));
+            const isSponsored = DETECT_SPONSORED_KEYWORDS.some(kw => {
+                if (normalizedTitle.includes(kw)) return true;
+                if (normalizedTexts.some(t => t.includes(kw))) return true;
+                let i = 0;
+                for (const char of characters) {
+                    if (char === kw[i] && ++i === kw.length) return true;
+                }
+                return false;
+            });
+            if (isSponsored) {
                 labelSponsored(carousel);
             }
         });
         if (!window.__ebaySponsoredMediaBlocked) {
             window.__ebaySponsoredMediaBlocked = true;
+            const shouldBlock = url => url && SPONSORED_CAROUSEL_MEDIA_BLOCKLIST.test(url) && document.querySelector('.sponsored-hidden-carousel');
             const origFetch = window.fetch;
             window.fetch = function(input, init) {
                 const url = typeof input === 'string' ? input : input?.url;
-                if (
-                    url &&
-                    SPONSORED_CAROUSEL_MEDIA_BLOCKLIST.test(url) &&
-                    document.querySelector('.sponsored-hidden-carousel')
-                ) {
-                    return Promise.reject();
-                }
+                if (shouldBlock(url)) return Promise.reject();
                 return origFetch.call(this, input, init);
             };
             const origOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                if (
-                    url &&
-                    SPONSORED_CAROUSEL_MEDIA_BLOCKLIST.test(url) &&
-                    document.querySelector('.sponsored-hidden-carousel')
-                ) {
+                if (shouldBlock(url)) {
                     this.abort();
                     return;
                 }
