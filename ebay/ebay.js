@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.1.0
+// @version      3.1.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -621,7 +621,7 @@
                 const maxDelay = Math.max(...cleanupStats.map(s => s.actual));
                 const maxExec = Math.max(...cleanupStats.map(s => s.exec));
                 console.log(
-                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY · ` +
+                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY - ` +
                     `LOAD: ${LOAD_TYPE} | RUNS: ${String(total).padStart(2, '0')} | ` +
                     `AVG DELAY: ${avgDelay.toFixed(2)}ms | MAX DELAY: ${maxDelay.toFixed(2)}ms | ` +
                     `AVG EXEC: ${avgExec.toFixed(2)}ms | MAX EXEC: ${maxExec.toFixed(2)}ms`
@@ -1797,6 +1797,8 @@
             'data-vi-scrolltracking', 'data-vi-tracking', 'data-view', 'modulemeta', 'moduleid', 'onload', 'semantichints',
             'trackingcontext'
         ]);
+        const neutralizedViewportEls = disableSiteTelemetryAttributes._neutralizedViewportEls ||
+            (disableSiteTelemetryAttributes._neutralizedViewportEls = new WeakSet());
         const RULESET = [{
                 match: el =>
                     el.hasAttribute('trackable-id') &&
@@ -1806,8 +1808,9 @@
                 }
             },
             {
-                match: el => el.hasAttribute('data-viewport'),
+                match: el => el.hasAttribute('data-viewport') && !neutralizedViewportEls.has(el),
                 run: el => {
+                    neutralizedViewportEls.add(el);
                     el.setAttribute('data-viewport', '{}');
                     if (el.matches('li')) {
                         el.removeAttribute('data-listingid');
@@ -2028,10 +2031,12 @@
     }
 
     function repairSiteButtons() {
+        const SWITCH_BUTTON_SELECTOR = ".switch__button, .filter__switch";
+        const SWITCH_CONTAINER_SELECTOR = ".filter__menu--switch, .spoke__item--switch";
         document.addEventListener("click", function(e) {
-            const button = e.target.closest(".switch__button");
+            const button = e.target.closest(SWITCH_BUTTON_SELECTOR);
             if (!button) return;
-            const container = button.closest(".filter__menu--switch");
+            const container = button.closest(SWITCH_CONTAINER_SELECTOR);
             if (!container) return;
             const input = container.querySelector('input[type="checkbox"]');
             if (!input) return;
@@ -2090,7 +2095,10 @@
                 history.replaceState(null, "", clean);
             }
         } catch {}
+        const cleanedLinkHrefs = cleanGeneralURLs._cleanedLinkHrefs ||
+            (cleanGeneralURLs._cleanedLinkHrefs = new WeakMap());
         document.querySelectorAll("a[href]").forEach(link => {
+            if (cleanedLinkHrefs.get(link) === link.href) return;
             try {
                 const url = new URL(link.href);
                 const params = url.searchParams;
@@ -2099,10 +2107,14 @@
                 }
                 const cleanURL = `${url.origin}${url.pathname}${url.search}${url.hash}`;
                 if (link.href !== cleanURL) link.href = cleanURL;
+                cleanedLinkHrefs.set(link, link.href);
             } catch {}
         });
         if (!skipFrames) {
+            const cleanedIframeSrcs = cleanGeneralURLs._cleanedIframeSrcs ||
+                (cleanGeneralURLs._cleanedIframeSrcs = new WeakMap());
             document.querySelectorAll("iframe[src]").forEach(iframe => {
+                if (cleanedIframeSrcs.get(iframe) === iframe.src) return;
                 try {
                     const url = new URL(iframe.src);
                     const params = url.searchParams;
@@ -2113,9 +2125,12 @@
                     if (iframe.src !== cleanSrc) {
                         iframe.src = cleanSrc;
                     }
+                    cleanedIframeSrcs.set(iframe, iframe.src);
                 } catch {}
             });
         }
+        const wiredForms = cleanGeneralURLs._wiredForms ||
+            (cleanGeneralURLs._wiredForms = new WeakSet());
         document.querySelectorAll("form").forEach(form => {
             const cleanForm = () => {
                 try {
@@ -2134,7 +2149,10 @@
                     });
             };
             cleanForm();
-            form.addEventListener("submit", cleanForm, true);
+            if (!wiredForms.has(form)) {
+                wiredForms.add(form);
+                form.addEventListener("submit", cleanForm, true);
+            }
         });
         if (observer) {
             observer.observe(document.body, {
