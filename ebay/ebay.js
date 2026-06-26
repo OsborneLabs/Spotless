@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.1.1
+// @version      3.2.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -621,7 +621,7 @@
                 const maxDelay = Math.max(...cleanupStats.map(s => s.actual));
                 const maxExec = Math.max(...cleanupStats.map(s => s.exec));
                 console.log(
-                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY - ` +
+                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - CLEANING SUMMARY · ` +
                     `LOAD: ${LOAD_TYPE} | RUNS: ${String(total).padStart(2, '0')} | ` +
                     `AVG DELAY: ${avgDelay.toFixed(2)}ms | MAX DELAY: ${maxDelay.toFixed(2)}ms | ` +
                     `AVG EXEC: ${avgExec.toFixed(2)}ms | MAX EXEC: ${maxExec.toFixed(2)}ms`
@@ -1223,11 +1223,14 @@
 
     function getListingElements() {
         return Array.from(document.querySelectorAll("li")).filter((el) => {
-            const classes = el.className.split(/\s+/);
-            const isClassicListing = classes.some(
+            const innerDiv = el.querySelector("div");
+            const liClasses = el.className ? el.className.split(/\s+/) : [];
+            const divClasses = innerDiv && innerDiv.className ? innerDiv.className.split(/\s+/) : [];
+            const allRelatedClasses = [...liClasses, ...divClasses];
+            const isClassicListing = allRelatedClasses.some(
                 (cls) => /^s-[\w-]+$/.test(cls)
             );
-            const isItemCardListing = classes.some(
+            const isItemCardListing = allRelatedClasses.some(
                 (cls) => cls.includes("item-card")
             );
             return isClassicListing || isItemCardListing;
@@ -1584,51 +1587,16 @@
                     return;
                 }
                 batch.forEach((listing) => {
-                    let svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
-                    let backgroundImage;
-                    if (svgDivSpan) {
-                        backgroundImage = getComputedStyle(svgDivSpan.parentElement).backgroundImage;
+                    let styleSourceText = "";
+                    const svgDivB = listing.querySelector(".su-sponsored-label__sep b[style*='data:image/svg+xml']");
+                    if (svgDivB) {
+                        styleSourceText = svgDivB.getAttribute("style") || "";
                     } else {
-                        const svgDivB = listing.querySelector(".s-card__sep b[style*='data:image/svg+xml']");
-                        if (!svgDivB) return done();
-                        backgroundImage = getComputedStyle(svgDivB).backgroundImage;
+                        const svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
+                        if (svgDivSpan && svgDivSpan.parentElement) {
+                            styleSourceText = window.getComputedStyle(svgDivSpan.parentElement).backgroundImage || "";
+                        }
                     }
-                    const match = backgroundImage.match(/url\("data:image\/svg\+xml;base64,([^"]+)"\)/);
-                    if (!match || !match[1]) return done();
-                    const base64 = match[1];
-                    const svgString = atob(base64);
-                    const img = new Image();
-                    const canvas = document.createElement("canvas");
-                    const ctx = canvas.getContext("2d");
-                    img.src = "data:image/svg+xml;base64," + btoa(svgString);
-                    img.onload = () => {
-                        canvas.width = img.naturalWidth || 20;
-                        canvas.height = img.naturalHeight || 20;
-                        ctx.drawImage(img, 0, 0);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                        const colors = new Set();
-                        const sampleWidth = 15;
-                        const sampleHeight = 15;
-                        for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
-                            for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
-                                const i = (y * canvas.width + x) * 4;
-                                const r = imageData[i];
-                                const g = imageData[i + 1];
-                                const b = imageData[i + 2];
-                                const a = imageData[i + 3];
-                                if (a > 0) {
-                                    colors.add(`${r},${g},${b}`);
-                                    if (colors.size > 1) break;
-                                }
-                            }
-                            if (colors.size > 1) break;
-                        }
-                        if (colors.size > 1) {
-                            sponsoredElements.push(listing);
-                        }
-                        done();
-                    };
-                    img.onerror = done;
 
                     function done() {
                         processedInBatch++;
@@ -1637,6 +1605,44 @@
                             setTimeout(processBatch, 0);
                         }
                     }
+                    if (!styleSourceText) return done();
+                    const match = styleSourceText.match(/data:image\/svg\+xml;base64,([^&?'")]+)/);
+                    if (!match || !match[1]) return done();
+                    const base64 = match[1];
+                    const img = new Image();
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+                    img.src = "data:image/svg+xml;base64," + base64;
+                    img.onload = () => {
+                        canvas.width = img.naturalWidth || 20;
+                        canvas.height = img.naturalHeight || 20;
+                        ctx.drawImage(img, 0, 0);
+                        try {
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                            const colors = new Set();
+                            const sampleWidth = 15;
+                            const sampleHeight = 15;
+                            for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
+                                for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
+                                    const i = (y * canvas.width + x) * 4;
+                                    const r = imageData[i];
+                                    const g = imageData[i + 1];
+                                    const b = imageData[i + 2];
+                                    const a = imageData[i + 3];
+                                    if (a > 0) {
+                                        colors.add(`${r},${g},${b}`);
+                                        if (colors.size > 1) break;
+                                    }
+                                }
+                                if (colors.size > 1) break;
+                            }
+                            if (colors.size > 1) {
+                                sponsoredElements.push(listing);
+                            }
+                        } catch (e) {}
+                        done();
+                    };
+                    img.onerror = done;
                 });
             }
             if (listings.length === 0) {
@@ -1961,6 +1967,39 @@
                 }
                 return origBeacon.call(this, url, ...args);
             };
+        }
+        const OrigWebSocket = window.WebSocket;
+        if (OrigWebSocket) {
+            window.WebSocket = function(url, ...args) {
+                const wsURL = typeof url === 'string' ? url : String(url);
+                if (handleBlockedRequest(wsURL)) {
+                    return {
+                        url: wsURL,
+                        readyState: 3,
+                        bufferedAmount: 0,
+                        protocol: '',
+                        extensions: '',
+                        binaryType: 'blob',
+                        onopen: null,
+                        onclose: null,
+                        onerror: null,
+                        onmessage: null,
+                        send() {},
+                        close() {},
+                        addEventListener() {},
+                        removeEventListener() {},
+                        dispatchEvent() {
+                            return false;
+                        }
+                    };
+                }
+                return new OrigWebSocket(url, ...args);
+            };
+            window.WebSocket.prototype = OrigWebSocket.prototype;
+            window.WebSocket.CONNECTING = OrigWebSocket.CONNECTING;
+            window.WebSocket.OPEN = OrigWebSocket.OPEN;
+            window.WebSocket.CLOSING = OrigWebSocket.CLOSING;
+            window.WebSocket.CLOSED = OrigWebSocket.CLOSED;
         }
     }
 
