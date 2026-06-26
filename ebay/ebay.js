@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.2.0
+// @version      3.2.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1586,63 +1586,83 @@
                     resolve(sponsoredElements);
                     return;
                 }
+
+                function done() {
+                    processedInBatch++;
+                    if (processedInBatch === batch.length) {
+                        index += batchSize;
+                        setTimeout(processBatch, 0);
+                    }
+                }
                 batch.forEach((listing) => {
                     let styleSourceText = "";
-                    const svgDivB = listing.querySelector(".su-sponsored-label__sep b[style*='data:image/svg+xml']");
+                    const svgDivB = listing.querySelector(
+                        ".su-sponsored-label__sep b[style*='data:image/svg+xml'], " +
+                        ".s-card__sep b[style*='data:image/svg+xml']"
+                    );
                     if (svgDivB) {
-                        styleSourceText = svgDivB.getAttribute("style") || "";
+                        styleSourceText =
+                            svgDivB.getAttribute("style") ||
+                            getComputedStyle(svgDivB).backgroundImage ||
+                            "";
                     } else {
-                        const svgDivSpan = listing.querySelector(".s-item__sep span[aria-hidden='true']");
-                        if (svgDivSpan && svgDivSpan.parentElement) {
-                            styleSourceText = window.getComputedStyle(svgDivSpan.parentElement).backgroundImage || "";
+                        const svgDivSpan = listing.querySelector(
+                            ".s-item__sep span[aria-hidden='true']"
+                        );
+                        if (svgDivSpan?.parentElement) {
+                            styleSourceText =
+                                getComputedStyle(svgDivSpan.parentElement)
+                                .backgroundImage || "";
                         }
                     }
-
-                    function done() {
-                        processedInBatch++;
-                        if (processedInBatch === batch.length) {
-                            index += batchSize;
-                            setTimeout(processBatch, 0);
-                        }
+                    if (!styleSourceText) {
+                        done();
+                        return;
                     }
-                    if (!styleSourceText) return done();
-                    const match = styleSourceText.match(/data:image\/svg\+xml;base64,([^&?'")]+)/);
-                    if (!match || !match[1]) return done();
-                    const base64 = match[1];
+                    const match = styleSourceText.match(
+                        /(?:url\(["']?)?data:image\/svg\+xml;base64,([^"'&)]+)/
+                    );
+                    if (!match) {
+                        done();
+                        return;
+                    }
                     const img = new Image();
                     const canvas = document.createElement("canvas");
                     const ctx = canvas.getContext("2d");
-                    img.src = "data:image/svg+xml;base64," + base64;
                     img.onload = () => {
-                        canvas.width = img.naturalWidth || 20;
-                        canvas.height = img.naturalHeight || 20;
-                        ctx.drawImage(img, 0, 0);
                         try {
-                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                            canvas.width = img.naturalWidth || 20;
+                            canvas.height = img.naturalHeight || 20;
+                            ctx.drawImage(img, 0, 0);
+                            const imageData = ctx.getImageData(
+                                0,
+                                0,
+                                canvas.width,
+                                canvas.height
+                            ).data;
                             const colors = new Set();
-                            const sampleWidth = 15;
-                            const sampleHeight = 15;
-                            for (let y = 0; y < sampleHeight && y < canvas.height; y++) {
-                                for (let x = 0; x < sampleWidth && x < canvas.width; x++) {
-                                    const i = (y * canvas.width + x) * 4;
-                                    const r = imageData[i];
-                                    const g = imageData[i + 1];
-                                    const b = imageData[i + 2];
-                                    const a = imageData[i + 3];
-                                    if (a > 0) {
-                                        colors.add(`${r},${g},${b}`);
-                                        if (colors.size > 1) break;
+                            const sampleWidth = Math.min(15, canvas.width);
+                            const sampleHeight = Math.min(15, canvas.height);
+                            outer:
+                                for (let y = 0; y < sampleHeight; y++) {
+                                    for (let x = 0; x < sampleWidth; x++) {
+                                        const i = (y * canvas.width + x) * 4;
+                                        if (imageData[i + 3] > 0) {
+                                            colors.add(
+                                                `${imageData[i]},${imageData[i + 1]},${imageData[i + 2]}`
+                                            );
+                                            if (colors.size > 1) {
+                                                sponsoredElements.push(listing);
+                                                break outer;
+                                            }
+                                        }
                                     }
                                 }
-                                if (colors.size > 1) break;
-                            }
-                            if (colors.size > 1) {
-                                sponsoredElements.push(listing);
-                            }
                         } catch (e) {}
                         done();
                     };
                     img.onerror = done;
+                    img.src = `data:image/svg+xml;base64,${match[1]}`;
                 });
             }
             if (listings.length === 0) {
