@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.2.1
+// @version      3.2.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -2030,61 +2030,68 @@
     function enhanceSellerInfo() {
         const listings = getListingElements();
         const hostname = window.location.hostname.replace(/^www\./, "");
-        for (const listing of listings) {
-            const sellerElements = listing.querySelectorAll(
-                ".su-card-container__attributes__secondary .s-card__attribute-row," +
-                ".s-card__program-badge-container--sellerOrStoreInfo"
+
+        function parseSellerText(text) {
+            text = text.trim().replace(/\s+/g, " ");
+            const match = text.match(
+                /^(.+?)\s+(\d+(?:\.\d+)?%\s+positive(?:\s+\([^)]+\))?)$/i
             );
-            for (const container of sellerElements) {
-                let username, feedback, targetEl = container;
-                const spans = container.querySelectorAll("span.su-styled-text");
-                if (spans.length >= 2) {
-                    username = spans[0].textContent.trim();
-                    feedback = spans[1].textContent.trim();
-                    targetEl = spans[0].parentElement;
-                } else {
-                    const combined = container.querySelector("span.su-styled-text.default");
-                    if (!combined) continue;
-                    const parts = combined.textContent.trim().split(/\s{2,}/);
-                    if (parts.length < 2) continue;
-                    [username, feedback] = parts;
-                    const wrapper = document.createElement("span");
-                    const userSpan = document.createElement("span");
-                    const feedbackSpan = document.createElement("span");
-                    userSpan.textContent = username;
-                    feedbackSpan.textContent = feedback;
-                    wrapper.append(userSpan, " ", feedbackSpan);
-                    combined.replaceWith(wrapper);
-                    targetEl = wrapper;
-                }
-                if (!username) continue;
-                if (!targetEl.querySelector("a.enhanced-seller-info")) {
-                    const sellerLink = document.createElement("a");
-                    sellerLink.className = "enhanced-seller-info";
-                    sellerLink.href = `https://${hostname}/usr/${encodeURIComponent(username)}`;
-                    sellerLink.target = "_blank";
-                    sellerLink.rel = "noopener noreferrer";
-                    sellerLink.textContent = username;
-                    targetEl.firstChild?.replaceWith(sellerLink);
-                }
-                const feedbackNode = targetEl.children[1];
-                if (
-                    feedbackNode &&
-                    feedbackNode.textContent.trim() === feedback &&
-                    !feedbackNode.querySelector("a.enhanced-seller-info")
-                ) {
-                    const feedbackLink = document.createElement("a");
-                    feedbackLink.className = "enhanced-seller-info";
-                    feedbackLink.href = `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`;
-                    feedbackLink.target = "_blank";
-                    feedbackLink.rel = "noopener noreferrer";
-                    feedbackLink.textContent = feedback;
-                    feedbackNode.replaceWith(feedbackLink);
-                    const bullet = document.createElement("span");
-                    bullet.textContent = " · ";
-                    bullet.style.padding = "0 0.15em";
-                    targetEl.insertBefore(bullet, feedbackLink);
-                }
+            if (!match) return null;
+            return {
+                username: match[1].trim(),
+                feedback: match[2].trim()
+            };
+        }
+
+        function createLink(href, text) {
+            const a = document.createElement("a");
+            a.className = "enhanced-seller-info";
+            a.href = href;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = text;
+            return a;
+        }
+        for (const listing of listings) {
+            const walker = document.createTreeWalker(
+                listing,
+                NodeFilter.SHOW_TEXT,
+                null
+            );
+            const textNodes = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                if (!node.nodeValue.trim()) continue;
+                textNodes.push(node);
+            }
+            for (const textNode of textNodes) {
+                const parent = textNode.parentElement;
+                if (!parent) continue;
+                if (parent.dataset.sellerEnhanced) continue;
+                if (parent.querySelector(".enhanced-seller-info")) continue;
+                const parsed = parseSellerText(textNode.nodeValue);
+                if (!parsed) continue;
+                const {
+                    username,
+                    feedback
+                } = parsed;
+                parent.dataset.sellerEnhanced = "1";
+                const frag = document.createDocumentFragment();
+                frag.appendChild(
+                    createLink(
+                        `https://${hostname}/usr/${encodeURIComponent(username)}`,
+                        username
+                    )
+                );
+                frag.appendChild(document.createTextNode(" · "));
+                frag.appendChild(
+                    createLink(
+                        `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
+                        feedback
+                    )
+                );
+                textNode.remove();
+                parent.appendChild(frag);
             }
         }
     }
