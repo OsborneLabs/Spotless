@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.2.2
+// @version      3.2.3
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -2036,11 +2036,12 @@
             const match = text.match(
                 /^(.+?)\s+(\d+(?:\.\d+)?%\s+positive(?:\s+\([^)]+\))?)$/i
             );
-            if (!match) return null;
-            return {
-                username: match[1].trim(),
-                feedback: match[2].trim()
-            };
+            return match ?
+                {
+                    username: match[1].trim(),
+                    feedback: match[2].trim()
+                } :
+                null;
         }
 
         function createLink(href, text) {
@@ -2053,45 +2054,67 @@
             return a;
         }
         for (const listing of listings) {
-            const walker = document.createTreeWalker(
-                listing,
-                NodeFilter.SHOW_TEXT,
-                null
+            const containers = listing.querySelectorAll(
+                ".su-card-container__attributes__secondary .s-card__attribute-row," +
+                ".s-card__program-badge-container--sellerOrStoreInfo"
             );
-            const textNodes = [];
-            let node;
-            while ((node = walker.nextNode())) {
-                if (!node.nodeValue.trim()) continue;
-                textNodes.push(node);
-            }
-            for (const textNode of textNodes) {
-                const parent = textNode.parentElement;
-                if (!parent) continue;
-                if (parent.dataset.sellerEnhanced) continue;
-                if (parent.querySelector(".enhanced-seller-info")) continue;
-                const parsed = parseSellerText(textNode.nodeValue);
-                if (!parsed) continue;
-                const {
-                    username,
-                    feedback
-                } = parsed;
-                parent.dataset.sellerEnhanced = "1";
-                const frag = document.createDocumentFragment();
-                frag.appendChild(
-                    createLink(
-                        `https://${hostname}/usr/${encodeURIComponent(username)}`,
-                        username
-                    )
-                );
-                frag.appendChild(document.createTextNode(" · "));
-                frag.appendChild(
-                    createLink(
+            for (const container of containers) {
+                if (container.dataset.sellerEnhanced) continue;
+                if (container.querySelector("a.enhanced-seller-info")) continue;
+                let username, feedback;
+                const spans = container.querySelectorAll("span.su-styled-text");
+                if (spans.length >= 2) {
+                    username = spans[0].textContent.trim();
+                    feedback = spans[1].textContent.trim();
+                    spans[0].replaceWith(
+                        createLink(
+                            `https://${hostname}/usr/${encodeURIComponent(username)}`,
+                            username
+                        )
+                    );
+                    const feedbackLink = createLink(
                         `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
                         feedback
-                    )
+                    );
+                    spans[1].replaceWith(feedbackLink);
+                    container.insertBefore(
+                        document.createTextNode(" · "),
+                        feedbackLink
+                    );
+                    container.dataset.sellerEnhanced = "1";
+                    continue;
+                }
+                const walker = document.createTreeWalker(
+                    container,
+                    NodeFilter.SHOW_TEXT,
+                    null
                 );
-                textNode.remove();
-                parent.appendChild(frag);
+                let textNode;
+                while ((textNode = walker.nextNode())) {
+                    if (!textNode.nodeValue.trim()) continue;
+                    const parsed = parseSellerText(textNode.nodeValue);
+                    if (!parsed) continue;
+                    username = parsed.username;
+                    feedback = parsed.feedback;
+                    const frag = document.createDocumentFragment();
+                    frag.appendChild(
+                        createLink(
+                            `https://${hostname}/usr/${encodeURIComponent(username)}`,
+                            username
+                        )
+                    );
+                    frag.appendChild(document.createTextNode(" · "));
+                    frag.appendChild(
+                        createLink(
+                            `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
+                            feedback
+                        )
+                    );
+                    textNode.remove();
+                    container.appendChild(frag);
+                    container.dataset.sellerEnhanced = "1";
+                    break;
+                }
             }
         }
     }
