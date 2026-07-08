@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.2.3
+// @version      3.3.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -61,7 +61,9 @@
             highlightedSponsoredContent: [],
             bannerUpdateScheduled: false,
             isContentProcessing: false,
-            updateScheduled: false
+            updateScheduled: false,
+            updateDebounceTimer: null,
+            updateFirstScheduledAt: 0
         },
         observer: {
             generalCleanupObserver: null,
@@ -560,7 +562,6 @@
     }
 
     function initMainObserver() {
-        if (state.observer.mainObserverInitialized) return;
         observer.observe(document.body, {
             childList: true,
             subtree: true,
@@ -862,6 +863,35 @@
         state.observer.generalCleanupObserver = observer;
     }
 
+    function initLiveEventHeroObserver() {
+        const purge = target => {
+            const hero =
+                target?.matches?.('.dp-hero-live-event-module') ?
+                target :
+                (target || document).querySelector?.('.dp-hero-live-event-module');
+            if (!hero) return false;
+            hero.closest('.page-grid-container')?.remove();
+            return true;
+        };
+        purge();
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+                    if (purge(node)) {
+                        return;
+                    }
+                }
+            }
+        });
+        observer.observe(document, {
+            childList: true,
+            subtree: true
+        });
+        return observer;
+    }
+
     async function buildPanel() {
         const wrapper = document.createElement("div");
         wrapper.id = "panelWrapper";
@@ -908,7 +938,7 @@
             state.ui.hidingEnabled = enabled;
             localStorage.setItem(STORAGE_KEY_HIDE_SPONSORED, String(enabled));
             updatePanelLockIcon();
-            scheduleHighlightUpdate();
+            applyHidingStateSponsoredContent();
         });
         updatePanelLockIcon();
     }
@@ -1103,7 +1133,7 @@
         state.ui.isContentProcessing = true;
         try {
             observer.disconnect();
-            resetSponsoredContent();
+            pruneStaleSponsoredContent();
             const detectedSponsoredElements = new Set();
             const separatorSizeMethod =
                 detectSponsoredListingBySeparatorSize();
@@ -1170,10 +1200,15 @@
                         ) {
                             designateSponsoredContent(el);
                             highlightSponsoredContent(el);
-                            hideShowSponsoredContent(
-                                el,
-                                state.ui.hidingEnabled
-                            );
+                        }
+                        hideShowSponsoredContent(
+                            el,
+                            state.ui.hidingEnabled
+                        );
+                    }
+                    for (const el of [...state.ui.highlightedSponsoredContent]) {
+                        if (!detectedSponsoredElements.has(el)) {
+                            unmarkSponsoredContent(el);
                         }
                     }
                 }
@@ -1211,14 +1246,26 @@
         if (countBubble) countBubble.textContent = count;
     }
 
-    function scheduleHighlightUpdate() {
-        if (state.ui.updateScheduled || state.ui.isContentProcessing) return;
-        state.ui.updateScheduled = true;
-        requestAnimationFrame(() => {
-            processSponsoredContent().finally(() => {
-                state.ui.updateScheduled = false;
+    function scheduleHighlightUpdate({
+        immediate = false
+    } = {}) {
+        if (state.ui.isContentProcessing) return;
+        const DEBOUNCE_MS = 180;
+        const MAX_WAIT_MS = 1000;
+        clearTimeout(state.ui.updateDebounceTimer);
+        if (!state.ui.updateScheduled) {
+            state.ui.updateScheduled = true;
+            state.ui.updateFirstScheduledAt = performance.now();
+        }
+        const elapsed = performance.now() - state.ui.updateFirstScheduledAt;
+        const delay = immediate || elapsed >= MAX_WAIT_MS ? 0 : DEBOUNCE_MS;
+        state.ui.updateDebounceTimer = setTimeout(() => {
+            requestAnimationFrame(() => {
+                processSponsoredContent().finally(() => {
+                    state.ui.updateScheduled = false;
+                });
             });
-        });
+        }, delay);
     }
 
     function getListingElements() {
@@ -1679,16 +1726,19 @@
         state.ui.highlightedSponsoredContent.push(el);
     }
 
-    function resetSponsoredContent() {
-        const elements = state.ui.highlightedSponsoredContent;
-        elements.forEach(el => {
-            el.classList.remove("sponsored-hidden");
-            el.removeAttribute("data-sponsored");
-            el.removeAttribute("data-sponsored-processed");
-            el.style.border = "";
-            el.style.backgroundColor = "";
-        });
-        elements.length = 0;
+    function unmarkSponsoredContent(el) {
+        el.classList.remove("sponsored-hidden", "sponsored-highlight");
+        el.removeAttribute("data-sponsored");
+        el.removeAttribute("data-sponsored-processed");
+        el.style.border = "";
+        el.style.backgroundColor = "";
+        const idx = state.ui.highlightedSponsoredContent.indexOf(el);
+        if (idx !== -1) state.ui.highlightedSponsoredContent.splice(idx, 1);
+    }
+
+    function pruneStaleSponsoredContent() {
+        state.ui.highlightedSponsoredContent =
+            state.ui.highlightedSponsoredContent.filter(el => el.isConnected);
     }
 
     function highlightSponsoredContent(element) {
@@ -1698,6 +1748,12 @@
 
     function hideShowSponsoredContent(element, hide) {
         element.classList.toggle("sponsored-hidden", hide);
+    }
+
+    function applyHidingStateSponsoredContent() {
+        for (const el of state.ui.highlightedSponsoredContent) {
+            if (el.isConnected) hideShowSponsoredContent(el, state.ui.hidingEnabled);
+        }
     }
 
     function removeSponsoredBanners(root = document) {
@@ -2034,12 +2090,11 @@
         function parseSellerText(text) {
             text = text.trim().replace(/\s+/g, " ");
             const match = text.match(
-                /^(.+?)\s+(\d+(?:\.\d+)?%\s+positive(?:\s+\([^)]+\))?)$/i
+                /^(.+?)\s+(\d+(?:\.\d+)?%\s*[^\d]*?(?:\([^)]+\))?)$/i
             );
-            return match ?
-                {
+            return match ? {
                     username: match[1].trim(),
-                    feedback: match[2].trim()
+                    feedback: match[2].trim(),
                 } :
                 null;
         }
@@ -2055,66 +2110,81 @@
         }
         for (const listing of listings) {
             const containers = listing.querySelectorAll(
-                ".su-card-container__attributes__secondary .s-card__attribute-row," +
+                ".su-card-container__attributes__secondary," +
                 ".s-card__program-badge-container--sellerOrStoreInfo"
             );
             for (const container of containers) {
-                if (container.dataset.sellerEnhanced) continue;
-                if (container.querySelector("a.enhanced-seller-info")) continue;
-                let username, feedback;
-                const spans = container.querySelectorAll("span.su-styled-text");
-                if (spans.length >= 2) {
-                    username = spans[0].textContent.trim();
-                    feedback = spans[1].textContent.trim();
-                    spans[0].replaceWith(
-                        createLink(
-                            `https://${hostname}/usr/${encodeURIComponent(username)}`,
-                            username
-                        )
-                    );
-                    const feedbackLink = createLink(
-                        `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
-                        feedback
-                    );
-                    spans[1].replaceWith(feedbackLink);
-                    container.insertBefore(
-                        document.createTextNode(" · "),
-                        feedbackLink
-                    );
-                    container.dataset.sellerEnhanced = "1";
+                if (
+                    container.dataset.sellerEnhanced ||
+                    container.querySelector(".enhanced-seller-info")
+                ) {
                     continue;
                 }
-                const walker = document.createTreeWalker(
-                    container,
-                    NodeFilter.SHOW_TEXT,
-                    null
-                );
-                let textNode;
-                while ((textNode = walker.nextNode())) {
-                    if (!textNode.nodeValue.trim()) continue;
-                    const parsed = parseSellerText(textNode.nodeValue);
-                    if (!parsed) continue;
-                    username = parsed.username;
-                    feedback = parsed.feedback;
-                    const frag = document.createDocumentFragment();
-                    frag.appendChild(
-                        createLink(
-                            `https://${hostname}/usr/${encodeURIComponent(username)}`,
-                            username
-                        )
+                let username = "";
+                let feedback = "";
+                let target = null;
+                const spans = container.querySelectorAll("span.su-styled-text");
+                if (spans.length >= 2) {
+                    const parsed = parseSellerText(
+                        `${spans[0].textContent} ${spans[1].textContent}`
                     );
-                    frag.appendChild(document.createTextNode(" · "));
-                    frag.appendChild(
-                        createLink(
-                            `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
+                    if (parsed) {
+                        ({
+                            username,
                             feedback
-                        )
-                    );
-                    textNode.remove();
-                    container.appendChild(frag);
-                    container.dataset.sellerEnhanced = "1";
-                    break;
+                        } = parsed);
+                        target = spans[0].parentNode;
+                    }
                 }
+                if (!target) {
+                    for (const span of spans) {
+                        const parsed = parseSellerText(span.textContent);
+                        if (!parsed) continue;
+
+                        ({
+                            username,
+                            feedback
+                        } = parsed);
+                        target = span;
+                        break;
+                    }
+                }
+                if (!target) {
+                    const walker = document.createTreeWalker(
+                        container,
+                        NodeFilter.SHOW_TEXT
+                    );
+                    while (walker.nextNode()) {
+                        const node = walker.currentNode;
+                        const parsed = parseSellerText(node.nodeValue);
+                        if (!parsed) continue;
+                        ({
+                            username,
+                            feedback
+                        } = parsed);
+                        target = node;
+                        break;
+                    }
+                }
+                if (!target) continue;
+                const frag = document.createDocumentFragment();
+                frag.append(
+                    createLink(
+                        `https://${hostname}/usr/${encodeURIComponent(username)}`,
+                        username
+                    ),
+                    document.createTextNode(" · "),
+                    createLink(
+                        `https://${hostname}/fdbk/feedback_profile/${encodeURIComponent(username)}`,
+                        feedback
+                    )
+                );
+                if (target.nodeType === Node.TEXT_NODE) {
+                    target.parentNode.replaceChild(frag, target);
+                } else {
+                    target.replaceChildren(frag);
+                }
+                container.dataset.sellerEnhanced = "1";
             }
         }
     }
@@ -2260,20 +2330,15 @@
         document
             .querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','))
             .forEach(el => el.remove());
-        document
-            .querySelectorAll('.dp-hero-live-event-module')
-            .forEach(hero => {
-                const container = hero.closest('.page-grid-container');
-                if (container) {
-                    container.remove();
-                }
-            });
     }
 
     const observer = new MutationObserver(() => {
         updatePanelVisibility();
         scheduleHighlightUpdate();
     });
+
+    initLiveEventHeroObserver();
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSanitizePageObserver);
     } else {
@@ -2294,7 +2359,7 @@
             );
             if (toggleInput) toggleInput.checked = isEnabled;
             updatePanelLockIcon();
-            scheduleHighlightUpdate();
+            applyHidingStateSponsoredContent();
             return;
         }
         if (key === STORAGE_KEY_PANEL_MINIMIZED) {
