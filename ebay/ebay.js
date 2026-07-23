@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.0
+// @version      3.3.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -68,8 +68,8 @@
         observer: {
             generalCleanupObserver: null,
             sponsoredCarouselObserver: null,
-            generalCleanupObserverInitialized: false,
             mainObserverInitialized: false,
+            generalCleanupObserverInitialized: false,
             sponsoredCarouselObserverInitialized: false
         }
     };
@@ -453,6 +453,8 @@
         document.head.appendChild(style);
     }
 
+    initDynamicHeroObserver();
+
     async function init() {
         initScriptObservers();
         createStyles();
@@ -797,6 +799,34 @@
         };
     }
 
+    function initDynamicHeroObserver() {
+        const purge = target => {
+            const hero =
+                target?.matches?.('.dp-hero-live-event-module') ?
+                target :
+                (target || document).querySelector?.('.dp-hero-live-event-module');
+            if (!hero) return false;
+            hero.closest('.page-grid-container')?.remove();
+            return true;
+        };
+        purge();
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    if (purge(node)) {
+                        return;
+                    }
+                }
+            }
+        });
+        observer.observe(document, {
+            childList: true,
+            subtree: true
+        });
+        return observer;
+    }
+
     function initSponsoredBannerObserver() {
         const observer = new MutationObserver(() => {
             if (state.ui.bannerUpdateScheduled) return;
@@ -861,35 +891,6 @@
             childList: true
         });
         state.observer.generalCleanupObserver = observer;
-    }
-
-    function initLiveEventHeroObserver() {
-        const purge = target => {
-            const hero =
-                target?.matches?.('.dp-hero-live-event-module') ?
-                target :
-                (target || document).querySelector?.('.dp-hero-live-event-module');
-            if (!hero) return false;
-            hero.closest('.page-grid-container')?.remove();
-            return true;
-        };
-        purge();
-        const observer = new MutationObserver(mutations => {
-            for (const mutation of mutations) {
-                for (const node of mutation.addedNodes) {
-                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-                    if (purge(node)) {
-                        return;
-                    }
-                }
-            }
-        });
-        observer.observe(document, {
-            childList: true,
-            subtree: true
-        });
-        return observer;
     }
 
     async function buildPanel() {
@@ -1741,6 +1742,12 @@
             state.ui.highlightedSponsoredContent.filter(el => el.isConnected);
     }
 
+    function applyHidingStateSponsoredContent() {
+        for (const el of state.ui.highlightedSponsoredContent) {
+            if (el.isConnected) hideShowSponsoredContent(el, state.ui.hidingEnabled);
+        }
+    }
+
     function highlightSponsoredContent(element) {
         element.setAttribute("data-sponsored", "true");
         element.classList.add("sponsored-highlight");
@@ -1748,12 +1755,6 @@
 
     function hideShowSponsoredContent(element, hide) {
         element.classList.toggle("sponsored-hidden", hide);
-    }
-
-    function applyHidingStateSponsoredContent() {
-        for (const el of state.ui.highlightedSponsoredContent) {
-            if (el.isConnected) hideShowSponsoredContent(el, state.ui.hidingEnabled);
-        }
     }
 
     function removeSponsoredBanners(root = document) {
@@ -2236,7 +2237,7 @@
         const TRACKING_PARAM_BLOCKLIST = [
             '_blrs', '_from', '_odkw', '_osacat', '_sacat', '_trksid', 'campaign', 'campid', 'cspheader', 'descgauge',
             'domain', 'excSoj', 'excTrk', 'iid', 'item', 'lsite', 'mkcid', 'mkevt', 'mkrid', 'oneClk', 'promoted_items',
-            'rt', 'sacat', 'secureDesc', 'siteid', 'source', 'sr', 'templateId', 'toolid'
+            'rt', 'sacat', 'secureDesc', 'siteid', 'source', 'sr', 'toolid'
         ];
         const cleanParam = key =>
             TRACKING_PARAM_BLOCKLIST.includes(key) ||
@@ -2322,13 +2323,13 @@
     }
 
     function cleanGeneralClutter() {
-        const GENERAL_CLUTTER_SELECTORS = [
-            '.d-sell-now--filmstrip-margin', '.dp-ads-module-container', '.dynamic-banner', '.madrona-banner',
+        const CLUTTER_SELECTORS = [
+            '.d-sell-now', '.d-sell-now--filmstrip-margin', '.dp-ads-module-container', '.dynamic-banner', '.madrona-banner',
             '.s-faq-list', '.s-feedback', '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module',
             '[class*="EBAY_LIVE_ENTRY"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
         ];
         document
-            .querySelectorAll(GENERAL_CLUTTER_SELECTORS.join(','))
+            .querySelectorAll(CLUTTER_SELECTORS.join(','))
             .forEach(el => el.remove());
     }
 
@@ -2336,8 +2337,6 @@
         updatePanelVisibility();
         scheduleHighlightUpdate();
     });
-
-    initLiveEventHeroObserver();
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSanitizePageObserver);
