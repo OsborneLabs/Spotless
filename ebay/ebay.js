@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.1
+// @version      3.3.2
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -2239,73 +2239,71 @@
             'domain', 'excSoj', 'excTrk', 'iid', 'item', 'lsite', 'mkcid', 'mkevt', 'mkrid', 'oneClk', 'promoted_items',
             'rt', 'sacat', 'secureDesc', 'siteid', 'source', 'sr', 'toolid'
         ];
-        const cleanParam = key =>
+        const isTrackingKey = key =>
             TRACKING_PARAM_BLOCKLIST.includes(key) ||
             key.startsWith("utm_") ||
             key.startsWith("_trk");
+        const shouldRemoveParam = (key, url) => {
+            if (isTrackingKey(key)) return true;
+            if (key === "templateId") {
+                const isRootPath = url.pathname === "/" || url.pathname === "";
+                return !isRootPath;
+            }
+            return false;
+        };
+        const cleanURL = (urlString) => {
+            try {
+                const url = new URL(urlString, location.href);
+                let modified = false;
+                for (const key of Array.from(url.searchParams.keys())) {
+                    if (shouldRemoveParam(key, url)) {
+                        url.searchParams.delete(key);
+                        modified = true;
+                    }
+                }
+                return modified ? `${url.origin}${url.pathname}${url.search}${url.hash}` : urlString;
+            } catch {
+                return urlString;
+            }
+        };
         const skipFrames = isLiveStreamPage();
         try {
-            const url = new URL(location.href);
-            const params = url.searchParams;
-            for (const key of Array.from(params.keys())) {
-                if (cleanParam(key)) params.delete(key);
-            }
-            const clean = `${url.origin}${url.pathname}${url.search}${url.hash}`;
-            if (clean !== location.href) {
-                history.replaceState(null, "", clean);
+            const cleanedHref = cleanURL(location.href);
+            if (cleanedHref !== location.href) {
+                history.replaceState(null, "", cleanedHref);
             }
         } catch {}
         const cleanedLinkHrefs = cleanGeneralURLs._cleanedLinkHrefs ||
             (cleanGeneralURLs._cleanedLinkHrefs = new WeakMap());
         document.querySelectorAll("a[href]").forEach(link => {
             if (cleanedLinkHrefs.get(link) === link.href) return;
-            try {
-                const url = new URL(link.href);
-                const params = url.searchParams;
-                for (const key of Array.from(params.keys())) {
-                    if (cleanParam(key)) params.delete(key);
-                }
-                const cleanURL = `${url.origin}${url.pathname}${url.search}${url.hash}`;
-                if (link.href !== cleanURL) link.href = cleanURL;
-                cleanedLinkHrefs.set(link, link.href);
-            } catch {}
+            const cleanHref = cleanURL(link.href);
+            if (link.href !== cleanHref) link.href = cleanHref;
+            cleanedLinkHrefs.set(link, link.href);
         });
         if (!skipFrames) {
             const cleanedIframeSrcs = cleanGeneralURLs._cleanedIframeSrcs ||
                 (cleanGeneralURLs._cleanedIframeSrcs = new WeakMap());
             document.querySelectorAll("iframe[src]").forEach(iframe => {
                 if (cleanedIframeSrcs.get(iframe) === iframe.src) return;
-                try {
-                    const url = new URL(iframe.src);
-                    const params = url.searchParams;
-                    for (const key of Array.from(params.keys())) {
-                        if (cleanParam(key)) params.delete(key);
-                    }
-                    const cleanSrc = `${url.origin}${url.pathname}${url.search}${url.hash}`;
-                    if (iframe.src !== cleanSrc) {
-                        iframe.src = cleanSrc;
-                    }
-                    cleanedIframeSrcs.set(iframe, iframe.src);
-                } catch {}
+                const cleanSrc = cleanURL(iframe.src);
+                if (iframe.src !== cleanSrc) iframe.src = cleanSrc;
+                cleanedIframeSrcs.set(iframe, iframe.src);
             });
         }
         const wiredForms = cleanGeneralURLs._wiredForms ||
             (cleanGeneralURLs._wiredForms = new WeakSet());
         document.querySelectorAll("form").forEach(form => {
             const cleanForm = () => {
-                try {
-                    if (form.action) {
-                        const url = new URL(form.action, location.href);
-                        const params = url.searchParams;
-                        for (const key of Array.from(params.keys())) {
-                            if (cleanParam(key)) params.delete(key);
-                        }
-                        form.action = `${url.origin}${url.pathname}${url.search}${url.hash}`;
-                    }
-                } catch {}
+                if (form.action) {
+                    form.action = cleanURL(form.action);
+                }
                 form.querySelectorAll("input[name], select[name], textarea[name]")
                     .forEach(el => {
-                        if (cleanParam(el.name)) el.remove();
+                        const mockUrl = form.action ? new URL(form.action, location.href) : new URL(location.href);
+                        if (shouldRemoveParam(el.name, mockUrl)) {
+                            el.remove();
+                        }
                     });
             };
             cleanForm();
