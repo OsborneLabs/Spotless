@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.2
+// @version      3.3.3
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -497,8 +497,12 @@
             /^https:\/\/([a-z0-9-]+\.)*ebay\.[a-z.]+\/b\/[^/]+\/\d+\/bn_\d+/i.test(location.href);
     }
 
+    function isCheckoutPage() {
+        return /^https:\/\/cart\.ebay\.[a-z.]+\//i.test(window.location.href);
+    }
+
     function determineCarouselDetection() {
-        return isListingPage();
+        return (typeof isListingPage === 'function' && isListingPage()) || isCheckoutPage();
     }
 
     function observeURLMutation({
@@ -1220,6 +1224,7 @@
                 cleanGeneralURLs();
                 cleanGeneralClutter();
                 enhanceSellerInfo();
+                upgradeListingImages();
                 initMainObserver();
                 state.ui.isContentProcessing = false;
             });
@@ -1785,7 +1790,30 @@
     }
 
     function removeSponsoredCarousels() {
+        function hideCheckoutMerchContainers() {
+            const STYLE_ID = 'sponsored-checkout-container';
+            if (document.getElementById(STYLE_ID)) return;
+            const style = document.createElement('style');
+            style.id = STYLE_ID;
+            style.textContent = `
+                .merch-container > div[id^="placement"] {
+                    position: absolute !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                    min-height: 0 !important;
+                    overflow: hidden !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                    clip: rect(0, 0, 0, 0) !important;
+                    clip-path: inset(50%) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
         if (!determineCarouselDetection()) return;
+        if (isCheckoutPage()) {
+            hideCheckoutMerchContainers();
+        }
         const SPONSORED_CAROUSEL_MEDIA_BLOCKLIST = /^https:\/\/video\.ebaycdn\.net\//i;
         const normalizeText = text =>
             text
@@ -2188,6 +2216,22 @@
                 container.dataset.sellerEnhanced = "1";
             }
         }
+    }
+
+    function upgradeListingImages() {
+        const images = document.querySelectorAll(
+            'img.s-card__image[data-defer-load]:not([data-image-upgraded])'
+        );
+        images.forEach((img) => {
+            const fullSizeUrl = img.getAttribute('data-defer-load');
+            if (!fullSizeUrl) return;
+            img.src = fullSizeUrl;
+            if (img.hasAttribute('srcset')) {
+                img.removeAttribute('srcset');
+            }
+            img.removeAttribute('data-defer-load');
+            img.setAttribute('data-image-upgraded', '1');
+        });
     }
 
     function repairSiteButtons() {
