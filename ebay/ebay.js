@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.3
+// @version      3.3.4
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -1815,6 +1815,7 @@
             hideCheckoutMerchContainers();
         }
         const SPONSORED_CAROUSEL_MEDIA_BLOCKLIST = /^https:\/\/video\.ebaycdn\.net\//i;
+        const BLOCKED_CAROUSEL_TITLES = ['goldin'];
         const normalizeText = text =>
             text
             .trim()
@@ -1862,6 +1863,13 @@
             if (carousel.closest('.lightbox-dialog, .ux-overlay, [role="dialog"]')) return;
             const title = carousel.querySelector('h2, h3, h4');
             const normalizedTitle = title ? normalizeText(title.textContent) : '';
+            if (BLOCKED_CAROUSEL_TITLES.some(kw => normalizedTitle.includes(kw))) {
+                const container = carousel.closest(
+                    '[class*="x-rx-slot-btf"], [class*="x-evo-btf-river"], [class*="x-evo-atf-top-river"]'
+                );
+                (container || carousel).remove();
+                return;
+            }
             const textElements = Array.from(carousel.querySelectorAll('div, span, p'));
             const normalizedTexts = textElements.map(el => normalizeText(el.textContent));
             const characters = normalizedTexts.filter(t => t.length === 1 && /^\p{L}$/u.test(t));
@@ -1955,7 +1963,7 @@
         let rootNodes;
         if (isSearchResultsPage() && context === document) {
             rootNodes = document.querySelectorAll(
-                '.x-header, .srp-main, .srp-main-content, .x-footer'
+                '.x-header, .srp-main, .srp-main-content, srp-rail__left, .x-footer'
             );
         } else {
             rootNodes = [context];
@@ -2367,8 +2375,8 @@
     function cleanGeneralClutter() {
         const CLUTTER_SELECTORS = [
             '.d-sell-now', '.d-sell-now--filmstrip-margin', '.dp-ads-module-container', '.dynamic-banner', '.madrona-banner',
-            '.s-faq-list', '.s-feedback', '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs', '.x-goldin-module',
-            '[class*="EBAY_LIVE_ENTRY"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
+            '.s-auth-guarantee-banner', '.s-faq-list', '.s-feedback', '.srp-river-answer--CAQ_PLACEHOLDER', '.su-faqs',
+            '.x-goldin-module', '[class*="EBAY_LIVE_ENTRY"]', '[class*="LIVE_EVENTS_CAROUSEL"]', '[class*="START_LISTING_BANNER"]'
         ];
         document
             .querySelectorAll(CLUTTER_SELECTORS.join(','))
