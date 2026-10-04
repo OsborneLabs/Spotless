@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.4
+// @version      3.3.5
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -56,6 +56,17 @@
     // Icon Designs by Mariusz Ostrowski, Microsoft, & Soco St
 
     const state = {
+        images: {
+            listingImageStates: new WeakMap(),
+            listingImageRecoveryStarted: false
+        },
+        observer: {
+            generalCleanupObserver: null,
+            sponsoredCarouselObserver: null,
+            mainObserverInitialized: false,
+            generalCleanupObserverInitialized: false,
+            sponsoredCarouselObserverInitialized: false
+        },
         ui: {
             hidingEnabled: localStorage.getItem(STORAGE_KEY_HIDE_SPONSORED) !== "false",
             highlightedSponsoredContent: [],
@@ -64,13 +75,6 @@
             updateScheduled: false,
             updateDebounceTimer: null,
             updateFirstScheduledAt: 0
-        },
-        observer: {
-            generalCleanupObserver: null,
-            sponsoredCarouselObserver: null,
-            mainObserverInitialized: false,
-            generalCleanupObserverInitialized: false,
-            sponsoredCarouselObserverInitialized: false
         }
     };
 
@@ -1224,7 +1228,7 @@
                 cleanGeneralURLs();
                 cleanGeneralClutter();
                 enhanceSellerInfo();
-                upgradeListingImages();
+                repairSiteImages();
                 initMainObserver();
                 state.ui.isContentProcessing = false;
             });
@@ -2226,20 +2230,101 @@
         }
     }
 
-    function upgradeListingImages() {
-        const images = document.querySelectorAll(
-            'img.s-card__image[data-defer-load]:not([data-image-upgraded])'
-        );
-        images.forEach((img) => {
-            const fullSizeUrl = img.getAttribute('data-defer-load');
-            if (!fullSizeUrl) return;
-            img.src = fullSizeUrl;
-            if (img.hasAttribute('srcset')) {
+    function repairSiteImages() {
+        document.querySelectorAll('img.s-card__image').forEach(img => {
+            const fullSizeURL = img.getAttribute('data-defer-load');
+            if (fullSizeURL) {
                 img.removeAttribute('srcset');
+                img.removeAttribute('data-defer-load');
+                img.src = fullSizeURL;
+                img.setAttribute('data-image-upgraded', '1');
             }
-            img.removeAttribute('data-defer-load');
-            img.setAttribute('data-image-upgraded', '1');
         });
+        if (state.images.listingImageRecoveryStarted) return;
+        state.images.listingImageRecoveryStarted = true;
+
+        const MAX_RETRIES = 3;
+        const LOAD_TIMEOUT_MS = 15000;
+        const RETRY_DELAYS_MS = [1000, 3000, 6000];
+        const isLoaded = img => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0;
+        const isVisible = img => {
+            if (!img.isConnected || !img.getClientRects().length) return false;
+            const rect = img.getBoundingClientRect();
+            return rect.bottom > 0 && rect.right > 0 &&
+                rect.top < window.innerHeight && rect.left < window.innerWidth;
+        };
+        const checkImages = () => {
+            if (document.hidden || navigator.onLine === false) {
+                document.querySelectorAll('img.s-card__image').forEach(img => {
+                    const recovery = state.images.listingImageStates.get(img);
+                    if (recovery) recovery.startedAt = 0;
+                });
+                return;
+            }
+            const now = Date.now();
+            document.querySelectorAll('img.s-card__image').forEach(img => {
+                const source = img.hasAttribute('srcset') ?
+                    (img.currentSrc || img.getAttribute('src')) : img.getAttribute('src');
+                if (!source) return;
+                let recovery = state.images.listingImageStates.get(img);
+                if (!recovery || recovery.source !== source) {
+                    recovery = {
+                        source,
+                        retries: 0,
+                        startedAt: 0,
+                        retryAt: 0
+                    };
+                    state.images.listingImageStates.set(img, recovery);
+                }
+                if (isLoaded(img)) {
+                    recovery.startedAt = 0;
+                    recovery.retryAt = 0;
+                    return;
+                }
+                if (!isVisible(img)) {
+                    recovery.startedAt = 0;
+                    return;
+                }
+                if (!recovery.startedAt) {
+                    recovery.startedAt = now;
+                    img.loading = 'eager';
+                }
+                if (recovery.retries >= MAX_RETRIES) return;
+                const failed = img.complete && img.naturalWidth === 0;
+                const stalled = now - recovery.startedAt >= LOAD_TIMEOUT_MS;
+                if (!failed && !stalled) {
+                    recovery.retryAt = 0;
+                    return;
+                }
+                if (!recovery.retryAt) {
+                    recovery.retryAt = now + RETRY_DELAYS_MS[recovery.retries];
+                }
+                if (now < recovery.retryAt) return;
+                let retryURL;
+                try {
+                    retryURL = new URL(source, document.baseURI);
+                    if (retryURL.protocol !== 'https:' ||
+                        !/(^|\.)ebayimg\.com$/i.test(retryURL.hostname)) return;
+                } catch {
+                    return;
+                }
+                recovery.retries++;
+                retryURL.searchParams.set('_spotless_retry', `${now}-${recovery.retries}`);
+                img.removeAttribute('srcset');
+                img.src = retryURL.href;
+                recovery.source = retryURL.href;
+                recovery.startedAt = now;
+                recovery.retryAt = 0;
+            });
+        };
+        checkImages();
+        window.setInterval(checkImages, 1000);
+        document.addEventListener('load', event => {
+            if (event.target.matches?.('img.s-card__image')) checkImages();
+        }, true);
+        document.addEventListener('error', event => {
+            if (event.target.matches?.('img.s-card__image')) checkImages();
+        }, true);
     }
 
     function repairSiteButtons() {
@@ -2352,8 +2437,8 @@
                 }
                 form.querySelectorAll("input[name], select[name], textarea[name]")
                     .forEach(el => {
-                        const mockUrl = form.action ? new URL(form.action, location.href) : new URL(location.href);
-                        if (shouldRemoveParam(el.name, mockUrl)) {
+                        const mockURL = form.action ? new URL(form.action, location.href) : new URL(location.href);
+                        if (shouldRemoveParam(el.name, mockURL)) {
                             el.remove();
                         }
                     });
