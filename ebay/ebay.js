@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.3.5
+// @version      3.4.0
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -38,7 +38,7 @@
 
     const SCRIPT_NAME = "Spotless";
     const SCRIPT_NAME_DEBUG = "SPOTLESS FOR EBAY";
-    const SCRIPT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : 'unknown';
+    const SCRIPT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : 'Unknown';
     const STORAGE_KEY_HIDE_SPONSORED = "hideSponsoredContent";
     const STORAGE_KEY_PANEL_MINIMIZED = "panelMinimized";
     const DETECT_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
@@ -457,8 +457,6 @@
         document.head.appendChild(style);
     }
 
-    initDynamicHeroObserver();
-
     async function init() {
         initScriptObservers();
         createStyles();
@@ -469,7 +467,6 @@
             removeSponsoredCarousels();
         }
         await processSponsoredContent();
-        disableSiteTelemetry();
         requestIdleCallback(cleanGeneralURLs, {
             timeout: 1500
         });
@@ -483,8 +480,9 @@
         const isVisuallySimilarPage = params.get("_vss") === "1";
         const isCompletedPage = params.get("LH_Complete") === "1";
         const isSoldPage = params.get("LH_Sold") === "1";
+        const isErrorPage = !!document.querySelector(".status--container .error-header") || /^Error Page\b/i.test(document.title);
         return (
-            isSearchResultsPage() && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage
+            isSearchResultsPage() && !isAdvancedSearchPage && !isVisuallySimilarPage && !isSellerPage && !isCompletedPage && !isSoldPage && !isErrorPage
         );
     }
 
@@ -664,16 +662,27 @@
             return origXHROpen.apply(this, args);
         };
         XMLHttpRequest.prototype.send = function(...args) {
+            let finish;
             if (!this.__spotlessTracked) {
                 this.__spotlessTracked = true;
                 trackRequestStart();
-                this.addEventListener('loadend', () => {
+                finish = () => {
+                    this.removeEventListener('loadend', finish);
+                    this.__spotlessTracked = false;
                     trackRequestEnd();
-                }, {
+                };
+                this.addEventListener('loadend', finish, {
                     once: true
                 });
             }
-            return origXHRSend.apply(this, args);
+            try {
+                return origXHRSend.apply(this, args);
+            } catch (error) {
+                if (finish && this.__spotlessTracked) {
+                    finish();
+                }
+                throw error;
+            }
         };
         async function stabilizeFrames(count) {
             for (let i = 0; i < count; i++) {
@@ -2001,127 +2010,354 @@
         }
     }
 
-    function disableSiteTelemetryNetworkRequests() {
-        const TELEMETRY_NETWORK_BLOCKLIST = [
-            /:\/\/(?:www\.)?ebayrtm\.com\b/i,
-            /:\/\/backstory\.ebay\./i,
-            /:\/\/devicebind\.ebay\./i,
-            /:\/\/ebay\.com\/scl\/js\/scandalloader\.js/i,
-            /:\/\/ebaystatic\.com\/cr\/v\/.*\/logs.*\.bundle\.js/i,
-            /:\/\/edgetrksvc\.ebay\./i,
-            /:\/\/event\..*\.shoplive\.cloud/i,
-            /:\/\/ir\.ebaystatic\.com\/cr\/ebay-rum\//i,
-            /:\/\/ir\.ebaystatic\.com\/rs\/c\/.*tracking\//i,
-            /:\/\/ir\.ebaystatic\.com\/rs\/c\/scandal\//i,
-            /:\/\/pulsar\.ebay\.com/i,
-            /:\/\/secureir\.ebaystatic\.com\b/i
-        ];
-        const loggedDomains = new Set();
-
-        function shouldBlock(url) {
-            return (
-                typeof url === 'string' &&
-                TELEMETRY_NETWORK_BLOCKLIST.some(rx => rx.test(url))
-            );
+    function interceptSiteFingerprinting() {
+        const marker = '__spotlessFingerprintingProtection';
+        if (window[marker]) {
+            return;
         }
-
-        function logOnce(url) {
-            let domain;
-            try {
-                domain = new URL(url).hostname;
-            } catch {
-                domain = url;
-            }
-            if (!loggedDomains.has(domain)) {
-                console.debug(
-                    `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - TELEMETRY REQUEST BLOCKED:`,
-                    url
-                );
-                if (domain) loggedDomains.add(domain);
-            }
-        }
-
-        function handleBlockedRequest(url, fallback) {
-            if (!shouldBlock(url)) {
-                return false;
-            }
-            logOnce(url);
-            if (typeof fallback === 'function') {
-                fallback();
-            }
-            return true;
-        }
-        const origFetch = window.fetch;
-        if (origFetch) {
-            window.fetch = function(resource, ...args) {
-                const url = typeof resource === 'string' ? resource : resource?.url;
-                if (handleBlockedRequest(url)) {
-                    return Promise.reject(
-                        new TypeError('blocked-telemetry-request')
-                    );
+        Object.defineProperty(window, marker, {
+            value: true
+        });
+        const prefix = `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - FINGERPRINTING INTERCEPTED:`;
+        const ownSource = (String(new Error().stack || '').match(/https?:\/\/[^\s)]+/) || [''])[0].replace(/:\d+(?::\d+)?$/, '');
+        const report = (kind, detail) => {
+            if (['collector registration', 'collector call', 'bundle call'].includes(kind)) {
+                let source = document.currentScript?.src || '';
+                if (!/^https?:\/\//.test(source) || source === ownSource) {
+                    const frames = String(new Error().stack || '').match(/https?:\/\/[^\s)]+/g) || [];
+                    source = frames.map(frame => frame.replace(/:\d+(?::\d+)?$/, ''))
+                        .find(frame => frame !== ownSource) || '';
                 }
-                return origFetch.call(this, resource, ...args);
-            };
-        }
-        const origOpen = XMLHttpRequest.prototype.open;
-        const origSend = XMLHttpRequest.prototype.send;
-        XMLHttpRequest.prototype.open = function(method, url, ...args) {
-            this.__telemetryBlocked = shouldBlock(url);
-            this.__telemetryURL = url;
-            return origOpen.call(this, method, url, ...args);
-        };
-        XMLHttpRequest.prototype.send = function(...args) {
-            if (handleBlockedRequest(this.__telemetryURL, () => this.abort())) {
+                console.log(prefix, source ? source + ' (' + String(detail) + ')' : String(detail));
                 return;
             }
-            return origSend.call(this, ...args);
+            console.log(prefix, String(kind).toUpperCase(), String(detail));
         };
-        if (navigator.sendBeacon) {
-            const origBeacon = navigator.sendBeacon;
-            navigator.sendBeacon = function(url, ...args) {
-                if (handleBlockedRequest(url)) {
-                    return true;
+        const warn = (detail, error) => console.warn(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - FINGERPRINTING GUARD FAILED:`, String(detail), String(error).toUpperCase());
+        const errorValue = () => ({
+            error: 'FINGERPRINTING INTERCEPTED BY SPOTLESS'
+        });
+        const collectors = {
+            initAudioFingerprinting: ['audio', true],
+            initAutomationDetection: ['automation', true],
+            initBatteryDetection: ['battery', true],
+            initCanvasFingerprinting: ['canvas', false],
+            initClientHintsDetection: ['clientHints', true],
+            initExtensionDomArtifactsDetection: ['extensionDomArtifacts', false],
+            initExtensionsDetection: ['extensions', true],
+            initFontsDetection: ['fonts', true],
+            initMathDetection: ['math', false],
+            initMiscDetection: ['misc', false],
+            initNavigatorFingerprinting: ['nav', true, null],
+            initNetworkDetection: ['network', true],
+            initPersistentId: ['persistentId', false],
+            initPluginsDetection: ['plugins', false],
+            initScreenFingerprinting: ['scr', true, null],
+            initSpeechDetection: ['speech', true],
+            initStorageDetection: ['storage', false],
+            initTimezoneFingerprinting: ['timezone', false, null],
+            initVirtualizationDetection: ['virtualization', false],
+            initWebGLFingerprinting: ['webgl', false]
+        };
+        const bundles = {
+            initBrowserBundle: [true, ['extensions', 'clientHints', 'network']],
+            initCoreBundle: [true, ['nav', 'scr', 'timezone']],
+            initDetectionBundle: [true, ['fonts', 'plugins']],
+            initGraphicsBundle: [false, ['canvas', 'webgl']],
+            initMediaBundle: [true, ['audio', 'speech']],
+            initMiscBundle: [false, ['math', 'misc']],
+            initSecurityBundle: [true, ['automation', 'virtualization', 'extensionDomArtifacts']],
+            initStorageBundle: [false, ['storage', 'persistentId']]
+        };
+        const guard = (name, stub) => {
+            try {
+                Object.defineProperty(window, name, {
+                    configurable: false,
+                    enumerable: false,
+                    get: () => stub,
+                    set: () => report('collector registration', name)
+                });
+            } catch (error) {
+                warn(name, error);
+            }
+        };
+        for (const [name, [field, asynchronous, fallback]] of Object.entries(collectors)) {
+            const stub = function() {
+                report('collector call', name);
+                const value = fallback === null ? null : errorValue();
+                try {
+                    window[field] = value;
+                } catch (error) {
+                    warn(field, error);
                 }
-                return origBeacon.call(this, url, ...args);
+                return asynchronous ? Promise.resolve(value) : value;
+            };
+            guard(name, stub);
+        }
+        for (const [name, [asynchronous, fields]] of Object.entries(bundles)) {
+            const stub = function() {
+                report('bundle call', name);
+                const value = Object.fromEntries(fields.map(field => [field,
+                    ['nav', 'scr', 'timezone'].includes(field) ? null : errorValue()
+                ]));
+                for (const field of fields) {
+                    try {
+                        window[field] = value[field];
+                    } catch (error) {
+                        warn(field, error);
+                    }
+                }
+                return asynchronous ? Promise.resolve(value) : value;
+            };
+            guard(name, stub);
+        }
+        const resourceURL = input => {
+            try {
+                const value = typeof input === 'string' || input instanceof URL ? input : input?.url;
+                if (value == null) {
+                    return null;
+                }
+                const url = new URL(value, document.baseURI);
+                return url.hostname === 'ir.ebaystatic.com' &&
+                    /^\/rs\/c\/deviceassurancewebapp_cdn\/(?:core|graphics|media|hardware|detection|browser|storage|misc|security)bundle\.[^/]+\.js$/.test(url.pathname) ?
+                    url : null;
+            } catch {
+                return null;
+            }
+        };
+        const blocked = (input, kind) => {
+            const url = resourceURL(input);
+            if (!url) {
+                return false;
+            }
+            report(kind, url.origin + url.pathname);
+            return true;
+        };
+        const originalFetch = window.fetch;
+        if (originalFetch) {
+            window.fetch = function(input, ...args) {
+                if (blocked(input, 'fetch')) {
+                    return Promise.reject(new TypeError('Fingerprinting blocked by Spotless'));
+                }
+                return Reflect.apply(originalFetch, this, [input, ...args]);
             };
         }
-        const OrigWebSocket = window.WebSocket;
-        if (OrigWebSocket) {
-            window.WebSocket = function(url, ...args) {
-                const wsURL = typeof url === 'string' ? url : String(url);
-                if (handleBlockedRequest(wsURL)) {
-                    return {
-                        url: wsURL,
-                        readyState: 3,
-                        bufferedAmount: 0,
-                        protocol: '',
-                        extensions: '',
-                        binaryType: 'blob',
-                        onopen: null,
-                        onclose: null,
-                        onerror: null,
-                        onmessage: null,
-                        send() {},
-                        close() {},
-                        addEventListener() {},
-                        removeEventListener() {},
-                        dispatchEvent() {
-                            return false;
-                        }
-                    };
-                }
-                return new OrigWebSocket(url, ...args);
+        const originalOpen = XMLHttpRequest.prototype.open;
+        const originalSend = XMLHttpRequest.prototype.send;
+        const xhrURLs = new WeakMap();
+        XMLHttpRequest.prototype.open = function(method, url, ...args) {
+            const result = Reflect.apply(originalOpen, this, [method, url, ...args]);
+            xhrURLs.set(this, resourceURL(url));
+            return result;
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+            if (blocked(xhrURLs.get(this), 'XHR')) {
+                this.abort();
+                throw new DOMException('Fingerprinting blocked by Spotless', 'NetworkError');
+            }
+            return Reflect.apply(originalSend, this, args);
+        };
+        const originalSetAttribute = Element.prototype.setAttribute;
+        const neutralize = script => {
+            if (!script || script.nodeType !== 1 || script.localName !== 'script') {
+                return;
+            }
+            if (!blocked(script.getAttribute('src'), 'script insertion')) {
+                return;
+            }
+            Reflect.apply(originalSetAttribute, script, ['type', 'application/x-spotless-blocked']);
+            script.removeAttribute('src');
+        };
+        const inspect = node => {
+            neutralize(node);
+            node?.querySelectorAll?.('script[src]').forEach(neutralize);
+        };
+        for (const method of ['appendChild', 'insertBefore', 'replaceChild']) {
+            const original = Node.prototype[method];
+            Node.prototype[method] = function(node, ...args) {
+                inspect(node);
+                return Reflect.apply(original, this, [node, ...args]);
             };
-            window.WebSocket.prototype = OrigWebSocket.prototype;
-            window.WebSocket.CONNECTING = OrigWebSocket.CONNECTING;
-            window.WebSocket.OPEN = OrigWebSocket.OPEN;
-            window.WebSocket.CLOSING = OrigWebSocket.CLOSING;
-            window.WebSocket.CLOSED = OrigWebSocket.CLOSED;
+        }
+        for (const prototype of [Element.prototype, Document.prototype, DocumentFragment.prototype]) {
+            for (const method of ['append', 'prepend', 'replaceChildren', 'before', 'after', 'replaceWith']) {
+                if (!Object.prototype.hasOwnProperty.call(prototype, method)) {
+                    continue;
+                }
+                const original = prototype[method];
+                prototype[method] = function(...nodes) {
+                    nodes.forEach(node => {
+                        if (typeof node !== 'string') {
+                            inspect(node);
+                        }
+                    });
+                    return Reflect.apply(original, this, nodes);
+                };
+            }
+        }
+        Element.prototype.setAttribute = function(name, value) {
+            if (this.localName === 'script' && String(name).toLowerCase() === 'src' && blocked(value, 'script src attribute')) {
+                Reflect.apply(originalSetAttribute, this, ['type', 'application/x-spotless-blocked']);
+                this.removeAttribute('src');
+                return;
+            }
+            return Reflect.apply(originalSetAttribute, this, [name, value]);
+        };
+        const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+        if (srcDescriptor?.configurable && srcDescriptor.set) {
+            Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+                ...srcDescriptor,
+                set(value) {
+                    if (blocked(value, 'script src property')) {
+                        Reflect.apply(originalSetAttribute, this, ['type', 'application/x-spotless-blocked']);
+                        this.removeAttribute('src');
+                        return;
+                    }
+                    return Reflect.apply(srcDescriptor.set, this, [value]);
+                }
+            });
+        }
+        try {
+            if (localStorage.getItem('__fp_eccs_id') !== null) {
+                localStorage.removeItem('__fp_eccs_id');
+                console.log(`${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - FINGERPRINTING IDENTIFIER REMOVED:`, '__fp_eccs_id');
+            }
+        } catch (error) {
+            warn('__fp_eccs_id cleanup', error);
         }
     }
 
+    function disableSiteTelemetryNetworkRequests() {
+        const interceptionMessage = 'TELEMETRY INTERCEPTED BY SPOTLESS';
+        const marker = '__spotlessTelemetryNetworkProtection';
+        if (window[marker]) {
+            return;
+        }
+        Object.defineProperty(window, marker, {
+            value: true
+        });
+        const marketplace = window.location.hostname.toLowerCase().match(/(?:^|\.)(ebay\..+)$/)?.[1];
+        const marketplaceDomains = new Set(['ebay.com', ...(marketplace ? [marketplace] : [])]);
+        const isMarketplaceDomain = domain => [...marketplaceDomains].some(base =>
+            domain === base || domain.endsWith('.' + base)
+        );
+        const telemetryServices = new Set(['backstory', 'devicebind', 'edgetrksvc', 'pulsar']);
+        const legacyHosts = new Set([
+            'ebayrtm.com', 'www.ebayrtm.com', 'secureir.ebaystatic.com'
+        ]);
+        const report = (transport, url) => console.log(
+            `${SCRIPT_NAME_DEBUG} v${SCRIPT_VERSION} - TELEMETRY INTERCEPTED: ${transport}`,
+            url.href
+        );
+        const getBlockedURL = input => {
+            try {
+                const value = typeof input === 'string' || input instanceof URL ? input : input?.url;
+                if (value == null) {
+                    return null;
+                }
+                const url = new URL(value, document.baseURI);
+                if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+                    return null;
+                }
+                const host = url.hostname;
+                const path = url.pathname;
+                const service = host.split('.')[0];
+                const domain = host.slice(service.length + 1);
+                const marketplaceService = isMarketplaceDomain(domain);
+                if (legacyHosts.has(host) ||
+                    (marketplaceService && telemetryServices.has(service)) ||
+                    (marketplaceService && service === 'rover' && /^\/(?:roverimp|roverclk|idmap)(?:\/|$)/.test(path)) ||
+                    (marketplaceService && service === 'svcs' && /^\/ufeservice\/v1\/beacon\/?$/.test(path)) ||
+                    (/^event\.(?:[a-z0-9-]+\.)*shoplive\.cloud$/.test(host)) ||
+                    ((marketplaceDomains.has(host) || (service === 'www' && marketplaceDomains.has(domain))) && path === '/scl/js/scandalloader.js') ||
+                    (['ebaystatic.com', 'ir.ebaystatic.com'].includes(host) && /^\/cr\/v\/[^/]+\/logs[^/]*\.bundle\.js$/.test(path)) ||
+                    (host === 'ir.ebaystatic.com' && (
+                        path.startsWith('/cr/ebay-rum/') ||
+                        /^\/rs\/c\/-ebay\/resource-client\/rum\.[^/]+\.js$/.test(path) ||
+                        /^\/rs\/c\/(?:[^/]+\/)*tracking\//.test(path) ||
+                        path.startsWith('/rs/c/scandal/')
+                    ))) {
+                    return url;
+                }
+            } catch {}
+            return null;
+        };
+        const intercept = (input, transport) => {
+            const url = getBlockedURL(input);
+            if (!url) {
+                return false;
+            }
+            report(transport, url);
+            return true;
+        };
+        const originalFetch = window.fetch;
+        if (originalFetch) {
+            window.fetch = function(resource, ...args) {
+                if (intercept(resource, 'FETCH')) {
+                    return Promise.reject(new TypeError(interceptionMessage));
+                }
+                return Reflect.apply(originalFetch, this, [resource, ...args]);
+            };
+        }
+        const originalOpen = XMLHttpRequest.prototype.open;
+        const originalSend = XMLHttpRequest.prototype.send;
+        const requests = new WeakMap();
+        XMLHttpRequest.prototype.open = function(method, url, ...args) {
+            const result = Reflect.apply(originalOpen, this, [method, url, ...args]);
+            requests.set(this, getBlockedURL(url));
+            return result;
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+            if (intercept(requests.get(this), 'XHR')) {
+                this.abort();
+                throw new DOMException(interceptionMessage, 'NetworkError');
+            }
+            return Reflect.apply(originalSend, this, args);
+        };
+        const originalBeacon = navigator.sendBeacon;
+        if (originalBeacon) {
+            navigator.sendBeacon = function(url, ...args) {
+                if (intercept(url, 'BEACON')) {
+                    return true;
+                }
+                return Reflect.apply(originalBeacon, this, [url, ...args]);
+            };
+        }
+        const OriginalWebSocket = window.WebSocket;
+        if (OriginalWebSocket) {
+            window.WebSocket = new Proxy(OriginalWebSocket, {
+                construct(target, args, newTarget) {
+                    if (intercept(args[0], 'WEBSOCKET')) {
+                        throw new DOMException(interceptionMessage, 'SecurityError');
+                    }
+                    return Reflect.construct(target, args, newTarget);
+                }
+            });
+        }
+        const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+        if (imageSrc?.configurable && imageSrc.set) {
+            Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                ...imageSrc,
+                set(value) {
+                    if (intercept(value, 'IMAGE')) {
+                        return;
+                    }
+                    return Reflect.apply(imageSrc.set, this, [value]);
+                }
+            });
+        }
+        const originalSetAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function(name, value) {
+            if (this.localName === 'img' && String(name).toLowerCase() === 'src' && intercept(value, 'IMAGE ATTRIBUTE')) {
+                return;
+            }
+            return Reflect.apply(originalSetAttribute, this, [name, value]);
+        };
+    }
+
     function disableSiteTelemetry() {
-        disableSiteTelemetryNetworkRequests(true);
+        disableSiteTelemetryNetworkRequests();
+        interceptSiteFingerprinting();
     }
 
     function enhanceSellerInfo() {
@@ -2467,6 +2703,9 @@
             .querySelectorAll(CLUTTER_SELECTORS.join(','))
             .forEach(el => el.remove());
     }
+
+    disableSiteTelemetry();
+    initDynamicHeroObserver();
 
     const observer = new MutationObserver(() => {
         updatePanelVisibility();
