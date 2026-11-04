@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotless for eBay
 // @namespace    https://github.com/OsborneLabs
-// @version      3.4.0
+// @version      3.4.1
 // @description  Hides sponsored listings, removes sponsored items, cleans links, & prevents tracking
 // @author       Osborne Labs
 // @license      GPL-3.0-only
@@ -41,6 +41,8 @@
     const SCRIPT_VERSION = typeof GM_info !== 'undefined' ? GM_info.script.version : 'Unknown';
     const STORAGE_KEY_HIDE_SPONSORED = "hideSponsoredContent";
     const STORAGE_KEY_PANEL_MINIMIZED = "panelMinimized";
+    const COMPACT_PANEL_MAX_WIDTH = 1024;
+    const compactPanelLayout = window.matchMedia(`(max-width: ${COMPACT_PANEL_MAX_WIDTH}px)`);
     const DETECT_SPONSORED_KEYWORDS = ['sponsored', 'anzeige', 'gesponsord', 'patrocinado', 'sponsorisé', 'sponsorizzato', 'sponsorowane', '助贊'];
     const UI_ICON_SET = {
         alert: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10.9084921,2.78216375 C11.9482635,2.20625071 13.2462954,2.54089334 13.8841246,3.52240345 L13.9669228,3.66023048 L21.725879,17.6684928 C21.9106772,18.0021332 22.0076302,18.3772743 22.0076302,18.7586748 C22.0076302,19.9495388 21.0824686,20.9243197 19.911679,21.003484 L19.7576302,21.0086748 L4.24187791,21.0086748 C3.86056733,21.0086748 3.48551176,20.9117674 3.15192815,20.7270522 C2.11208877,20.1512618 1.7070482,18.8734454 2.20060302,17.8120352 L2.27350053,17.668725 L10.0302967,3.66046274 C10.2348245,3.291099 10.5391525,2.98673515 10.9084921,2.78216375 Z M12.0004478,16.0017852 C11.4489016,16.0017852 11.0017852,16.4489016 11.0017852,17.0004478 C11.0017852,17.5519939 11.4489016,17.9991104 12.0004478,17.9991104 C12.5519939,17.9991104 12.9991104,17.5519939 12.9991104,17.0004478 C12.9991104,16.4489016 12.5519939,16.0017852 12.0004478,16.0017852 Z M11.9982876,7.99806092 C11.4854518,7.99824566 11.0629195,8.38443798 11.0053334,8.88179743 L10.9986476,8.99842097 L11.0004479,13.9993002 L11.0072176,14.1159189 C11.0651617,14.6132367 11.487972,14.9991248 12.0008078,14.9989403 C12.5136436,14.9987555 12.9361759,14.6125632 12.993762,14.1152038 L13.0004478,13.9985802 L12.9986476,8.99770102 L12.9918779,8.88108232 C12.9339337,8.38376446 12.5111234,7.99787644 11.9982876,7.99806092 Z" fill-rule="nonzero"/></svg>`,
@@ -61,11 +63,11 @@
             listingImageRecoveryStarted: false
         },
         observer: {
-            generalCleanupObserver: null,
-            sponsoredCarouselObserver: null,
             mainObserverInitialized: false,
             generalCleanupObserverInitialized: false,
-            sponsoredCarouselObserverInitialized: false
+            sponsoredCarouselObserverInitialized: false,
+            generalCleanupObserver: null,
+            sponsoredCarouselObserver: null,
         },
         ui: {
             hidingEnabled: localStorage.getItem(STORAGE_KEY_HIDE_SPONSORED) !== "false",
@@ -74,6 +76,7 @@
             isContentProcessing: false,
             updateScheduled: false,
             updateDebounceTimer: null,
+            panelMorphCleanup: null,
             updateFirstScheduledAt: 0
         }
     };
@@ -108,15 +111,16 @@
                 --size-text-header-title: 24px;
                 --size-thickness-highlight-border: 2px;
             }
-            @media (max-width: 768px) {
+            @media (max-width: ${COMPACT_PANEL_MAX_WIDTH}px) {
                 #panelWrapper {
                     position: fixed;
-                    right: unset;
-                    bottom: 5px;
-                    left: 50%;
+                    right: 0;
+                    bottom: 0;
+                    left: 0;
                     width: 90% !important;
                     padding: 0 16px;
-                    transform: translateX(-50%);
+                    margin-inline: auto;
+                    transform: none;
                 }
                 #panelHeader h2.panel-title {
                     position: static;
@@ -157,6 +161,119 @@
             #panelBox:hover {
                 transform: translate3d(0, -2px, 0);
             }
+            #compactPanelTab {
+                display: flex;
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                align-items: center;
+                justify-content: center;
+                min-height: 44px;
+                padding: 8px 18px;
+                font: inherit;
+                color: var(--color-text-default);
+                background: var(--color-panel-default);
+                border: 0;
+                border-radius: 16px 16px 0 0;
+                backdrop-filter: blur(10px);
+                cursor: pointer;
+                pointer-events: auto;
+                transform: translateX(-50%);
+            }
+            #compactPanelTab .compact-panel-title {
+                font-size: calc(var(--size-text-header-title) * 0.75);
+                font-weight: 600;
+                line-height: 1.25;
+            }
+            #compactPanelTab[hidden], #panelBox:not(.show) ~ #compactPanelTab {
+                display: none;
+            }
+            @media (max-width: ${COMPACT_PANEL_MAX_WIDTH}px) {
+                #panelWrapper {
+                    --spotless-bottom-inset: env(safe-area-max-inset-bottom, 0px);
+                    right: 0;
+                    bottom: 0;
+                    top: auto;
+                    height: 0;
+                    max-height: none;
+                    margin: 0 auto;
+                    border: 0;
+                    overflow: visible;
+                    background: transparent;
+                    color: var(--color-text-default);
+                    isolation: isolate;
+                    pointer-events: none;
+                }
+                #panelWrapper::backdrop {
+                    background: transparent;
+                    pointer-events: none;
+                }
+                #panelBox.show {
+                    max-height: calc(100svh - 32px - var(--spotless-bottom-inset));
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    position: absolute;
+                    bottom: calc(10px + var(--spotless-bottom-inset));
+                    left: 16px;
+                    width: calc(100% - 32px);
+                    margin: 0;
+                    padding: 16px;
+                    border-radius: 16px;
+                    align-items: stretch;
+                    text-align: left;
+                    transform: none;
+                    transition: none;
+                    pointer-events: auto;
+                }
+                #panelBox.show:hover {
+                    transform: none;
+                }
+                #panelWrapper.compact-morphing #panelBox.show {
+                    display: flex;
+                    overflow: hidden;
+                    pointer-events: none;
+                }
+                #panelWrapper.compact-morphing #compactPanelTab {
+                    display: none;
+                }
+                #panelWrapper.compact-morphing.compact-closing #lockIconContainer,
+                #panelWrapper.compact-morphing.compact-closing #lockIconContainer svg {
+                    visibility: hidden;
+                }
+                #panelHeader {
+                    cursor: pointer;
+                }
+                #compactPanelTab {
+                    padding-bottom: calc(8px + var(--spotless-bottom-inset));
+                    --spotless-mini-idle-opacity: 0.35;
+                    --spotless-mini-idle-delay: 3s;
+                    opacity: 1;
+                    animation: spotless-mini-idle 200ms ease var(--spotless-mini-idle-delay) forwards;
+                }
+                #compactPanelTab:hover, #compactPanelTab:focus-visible {
+                    animation: none;
+                    opacity: 1;
+                }
+                #panelWrapper.compact-hidden #panelBox {
+                    display: none;
+                }
+            }
+            @keyframes spotless-mini-idle {
+                from {
+                    opacity: 1;
+                }
+                to {
+                    opacity: var(--spotless-mini-idle-opacity, 0.60);
+                }
+            }
+            @media (reduced-motion: reduce) {
+                #panelBox.show {
+                    transition: none;
+                }
+                #compactPanelTab {
+                    animation-duration: 0.001ms;
+                }
+            }
             #panelBox.minimized {
                 overflow: hidden;
                 padding: 12px;
@@ -174,9 +291,9 @@
                 display: flex;
                 align-items: center;
                 margin: 0;
-                color: var(--color-text-default);
                 font-size: var(--size-text-header-title);
                 font-weight: 600;
+                color: var(--color-text-default);
             }
             h2.panel-title, #lockIconContainer {
                 position: relative;
@@ -195,10 +312,10 @@
                 justify-content: space-between;
                 margin: 0;
                 padding: 12px 16px;
+                font-size: var(--size-text-body-default);
                 background: var(--color-panel-row-default);
                 border-radius: 16px;
                 backdrop-filter: blur(12px);
-                font-size: var(--size-text-body-default);
             }
             .panel-body-row + .panel-body-row {
                 margin-top: 5px;
@@ -215,8 +332,8 @@
                 justify-content: flex-end;
                 gap: 6px;
                 height: 10px;
-                color: var(--color-text-default);
                 font-size: var(--size-text-footer-default);
+                color: var(--color-text-default);
             }
             #minimizePanelButton {
                 display: flex;
@@ -264,8 +381,8 @@
                 transition: transform 0.3s ease;
             }
             .footer-icon-tooltip {
-                position: relative;
                 display: inline-flex;
+                position: relative;
                 align-items: center;
                 justify-content: center;
             }
@@ -275,13 +392,13 @@
                 left: 50%;
                 z-index: 99999;
                 padding: 6px 8px;
+                font-size: 11px;
+                white-space: nowrap;
                 color: var(--color-text-default);
                 background: var(--color-panel-footer-tooltip);
                 border-radius: 8px;
-                content: attr(data-tooltip);
-                font-size: 11px;
-                white-space: nowrap;
                 opacity: 0;
+                content: attr(data-tooltip);
                 pointer-events: none;
                 transform: translateX(-50%) translateY(4px);
                 transition: opacity 0.2s ease, transform 0.2s ease;
@@ -292,8 +409,8 @@
                 left: 50%;
                 z-index: 99998;
                 border: 5px solid transparent;
-                content: "";
                 opacity: 0;
+                content: "";
                 pointer-events: none;
                 transform: translateX(-50%) translateY(4px);
                 transition: opacity 0.2s ease, transform 0.2s ease;
@@ -306,10 +423,10 @@
                 position: relative;
                 top: 0;
                 left: 0;
+                flex-shrink: 0;
                 width: 50px;
                 height: 50px;
                 fill: var(--color-app-icon-default);
-                flex-shrink: 0;
             }
             .update-icon, .megaphone-icon, .heart-icon {
                 display: block;
@@ -343,16 +460,16 @@
             #countBubble {
                 min-width: 20px;
                 padding: 3px 8px;
-                color: var(--color-text-default);
-                background-color: var(--color-app-bubble);
-                border-radius: 999px;
                 font-size: 12px;
                 font-weight: bold;
                 text-align: center;
+                color: var(--color-text-default);
+                background-color: var(--color-app-bubble);
+                border-radius: 999px;
             }
             .switch {
-                position: relative;
                 display: inline-block;
+                position: relative;
                 width: 42px;
                 height: 22px;
             }
@@ -370,9 +487,9 @@
                 right: 0;
                 bottom: 0;
                 left: 0;
-                cursor: pointer;
                 background-color: var(--color-app-switch-off);
                 border-radius: 34px;
+                cursor: pointer;
                 transition: 0.3s;
             }
             .slider:before {
@@ -381,9 +498,9 @@
                 left: 2px;
                 width: 18px;
                 height: 18px;
-                content: "";
                 background-color: var(--color-app-switch-thumb);
                 border-radius: 50%;
+                content: "";
                 transition: 0.3s;
             }
             input:checked + .slider {
@@ -402,8 +519,8 @@
                 color: var(--color-text-link-panel-hover);
             }
             .outbound-status-page, .outbound-update-page {
-                color: var(--color-text-link-panel-default);
                 text-decoration: underline;
+                color: var(--color-text-link-panel-default);
             }
             .outbound-status-page:visited, .outbound-update-page:visited {
                 color: var(--color-text-link-panel-default);
@@ -424,14 +541,14 @@
                 width: 100%;
             }
             .error-icon-container {
-                flex: 0 0 45%;
                 display: flex;
+                flex: 0 0 45%;
                 justify-content: flex-end;
             }
             .error-icon-container svg {
                 width: auto;
-                height: auto;
                 max-width: 100%;
+                height: auto;
                 max-height: 110px;
                 fill: var(--color-app-icon-default);
             }
@@ -439,12 +556,12 @@
                 position: relative;
                 right: 10px;
                 flex: 0 0 55%;
-                text-align: left;
                 line-height: 1.2;
+                text-align: left;
             }
             .error-page p {
-                text-align: left;
                 font-size: var(--size-text-body-error-subtitle);
+                text-align: left;
             }
             .sponsored-highlight {
                 background-color: var(--color-highlight-background);
@@ -933,17 +1050,57 @@
         );
         wrapper.appendChild(panelBox);
         document.body.appendChild(wrapper);
-        const isPanelMinimized =
-            localStorage.getItem(STORAGE_KEY_PANEL_MINIMIZED) === "true";
-        setPanelMinimized(isPanelMinimized);
+        const compactTab = document.createElement("button");
+        compactTab.id = "compactPanelTab";
+        compactTab.type = "button";
+        const compactTitle = document.createElement("span");
+        compactTitle.className = "compact-panel-title";
+        compactTitle.textContent = SCRIPT_NAME;
+        compactTab.appendChild(compactTitle);
+        compactTab.setAttribute("aria-label", "Open Spotless panel");
+        compactTab.setAttribute("aria-controls", "panelBox");
+        compactTab.hidden = true;
+        wrapper.appendChild(compactTab);
+        compactTab.addEventListener("click", () => {
+            localStorage.setItem(STORAGE_KEY_PANEL_MINIMIZED, "false");
+            applyPanelLayout();
+            if (!state.ui.panelMorphCleanup) {
+                document.getElementById("minimizePanelButton").focus({
+                    preventScroll: true
+                });
+            }
+        });
+        if (compactPanelLayout.addEventListener) {
+            compactPanelLayout.addEventListener("change", applyPanelLayout);
+        } else {
+            compactPanelLayout.addListener(applyPanelLayout);
+        }
+        applyPanelLayout();
         const minimizeButton = document.getElementById("minimizePanelButton");
         if (minimizeButton) {
             minimizeButton.addEventListener("click", () => {
-                const newState = !panelBox.classList.contains("minimized");
-                localStorage.setItem(STORAGE_KEY_PANEL_MINIMIZED, String(newState));
-                setPanelMinimized(newState);
+                if (compactPanelLayout.matches) {
+                    localStorage.setItem(STORAGE_KEY_PANEL_MINIMIZED, "true");
+                    applyPanelLayout();
+                    if (!compactTab.hidden) {
+
+                        compactTab.focus({
+                            preventScroll: true
+                        });
+
+                    }
+                } else {
+                    const newState = !panelBox.classList.contains("minimized");
+                    localStorage.setItem(STORAGE_KEY_PANEL_MINIMIZED, String(newState));
+                    applyPanelLayout();
+                }
             });
         }
+        header.addEventListener("click", (event) => {
+            if (!compactPanelLayout.matches || !minimizeButton) return;
+            if (minimizeButton.contains(event.target)) return;
+            minimizeButton.click();
+        });
         const toggleInput = document.getElementById("toggleSponsoredContentSwitch");
         if (!toggleInput) {
             updatePanelLockIcon();
@@ -1039,7 +1196,7 @@
     function createSponsoredToggleRow() {
         const row = createPanelRow(`
             <span class="switch-label">Hide all sponsored</span>
-            <label class="switch" aria-label="Toggles the visibility of sponsored listings">
+            <label class="switch" aria-label="Hides or shows sponsored listings">
                 <input type="checkbox" id="toggleSponsoredContentSwitch" ${state.ui.hidingEnabled ? "checked" : ""}>
                 <span class="slider"></span>
             </label>
@@ -1113,6 +1270,160 @@
             panelBox.classList.add("show");
         } else {
             panelBox.classList.remove("show");
+        }
+    }
+
+    function animateCompactPanel(panel, wrapper, tab, closing) {
+        panel.scrollLeft = 0;
+        const title = panel.querySelector(".panel-title");
+        const miniTitle = tab.querySelector(".compact-panel-title");
+        const mini = tab.getBoundingClientRect();
+        const miniText = miniTitle.getBoundingClientRect();
+        wrapper.classList.toggle("compact-closing", closing);
+        wrapper.classList.add("compact-morphing");
+        const full = panel.getBoundingClientRect();
+        const fullText = title.getBoundingClientRect();
+        const children = Array.from(panel.children);
+        const widths = children.map(child => child.getBoundingClientRect().width);
+        const savedStyles = children.map(child => ["width", "flex-shrink"].map(property => ({
+            property,
+            value: child.style.getPropertyValue(property),
+            priority: child.style.getPropertyPriority(property)
+        })));
+        children.forEach((child, index) => {
+            child.style.setProperty("width", widths[index] + "px", "important");
+            child.style.setProperty("flex-shrink", "0", "important");
+        });
+        const options = {
+            duration: 220,
+            easing: "cubic-bezier(0.2, 0, 0, 1)",
+            fill: "both"
+        };
+        const small = {
+            bottom: "0px",
+            width: mini.width + "px",
+            height: mini.height + "px",
+            marginLeft: (mini.left - full.left) + "px",
+            marginBottom: "0px",
+            borderRadius: "16px 16px 0px 0px"
+        };
+        const large = {
+            bottom: getComputedStyle(panel).bottom,
+            width: full.width + "px",
+            height: full.height + "px",
+            marginLeft: "0px",
+            marginBottom: getComputedStyle(panel).marginBottom,
+            borderRadius: "16px"
+        };
+        const titleSmall = {
+            transformOrigin: "left top",
+            transform: "translate(" + (miniText.left - fullText.left - (mini.left - full.left)) +
+                "px, " + (miniText.top - mini.top - (fullText.top - full.top)) +
+                "px) scale(" + (parseFloat(getComputedStyle(miniTitle).fontSize) /
+                    parseFloat(getComputedStyle(title).fontSize)) + ")"
+        };
+        const titleLarge = {
+            transformOrigin: "left top",
+            transform: "translate(0px, 0px) scale(1)"
+        };
+        const surface = panel.animate(closing ? [large, small] : [small, large], options);
+        const heading = title.animate(closing ? [titleLarge, titleSmall] : [titleSmall, titleLarge], options);
+        let finished = false;
+        let finishTimer;
+        const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(finishTimer);
+            surface.cancel();
+            heading.cancel();
+            children.forEach((child, index) => {
+                savedStyles[index].forEach(({
+                    property,
+                    value,
+                    priority
+                }) => {
+                    if (value) child.style.setProperty(property, value, priority);
+                    else child.style.removeProperty(property);
+                });
+            });
+            wrapper.classList.remove("compact-morphing", "compact-closing");
+            panel.scrollLeft = 0;
+            state.ui.panelMorphCleanup = null;
+            if (compactPanelLayout.matches) {
+                if (closing && wrapper.classList.contains("compact-hidden")) {
+                    tab.focus({
+                        preventScroll: true
+                    });
+                } else if (!closing && !wrapper.classList.contains("compact-hidden")) {
+                    const button = document.getElementById("minimizePanelButton");
+                    if (button) {
+
+                        button.focus({
+                            preventScroll: true
+                        });
+
+                    }
+                }
+            }
+        };
+        state.ui.panelMorphCleanup = cleanup;
+        surface.onfinish = cleanup;
+        surface.oncancel = cleanup;
+        finishTimer = window.setTimeout(cleanup, options.duration + 100);
+    }
+
+    function applyPanelLayout() {
+        const panelBox = document.getElementById("panelBox");
+        const wrapper = document.getElementById("panelWrapper");
+        const tab = document.getElementById("compactPanelTab");
+        if (!panelBox || !wrapper || !tab) return;
+        if (state.ui.panelMorphCleanup) state.ui.panelMorphCleanup();
+        const wasTucked = wrapper.classList.contains("compact-hidden");
+        const compact = compactPanelLayout.matches;
+        if (typeof wrapper.showPopover === "function") {
+            if (compact) {
+                wrapper.setAttribute("popover", "manual");
+                if (!wrapper.matches(":popover-open")) wrapper.showPopover();
+            } else if (wrapper.hasAttribute("popover")) {
+                if (wrapper.matches(":popover-open")) wrapper.hidePopover();
+                wrapper.removeAttribute("popover");
+            }
+        } else {
+            const parent = compact ? document.documentElement : document.body;
+            if (wrapper.parentNode !== parent) parent.appendChild(wrapper);
+        }
+        const savedMinimized = localStorage.getItem(STORAGE_KEY_PANEL_MINIMIZED) === "true";
+        const tucked = compact && savedMinimized;
+        const minimized = !compact && savedMinimized;
+        const animate = compact && wasTucked !== tucked &&
+            panelBox.classList.contains("show") && typeof panelBox.animate === "function" &&
+            !window.matchMedia("(reduced-motion: reduce)").matches;
+        if (animate) tab.hidden = false;
+        setPanelMinimized(minimized);
+        wrapper.classList.toggle("compact-hidden", tucked);
+        panelBox.inert = tucked;
+        panelBox.setAttribute("aria-hidden", String(tucked));
+        tab.hidden = animate ? false : !tucked;
+        const button = document.getElementById("minimizePanelButton");
+        if (button) {
+            button.setAttribute("aria-label", compact ? "Hide Spotless panel" :
+                (minimized ? "Expand Spotless panel" : "Minimize Spotless panel"));
+            button.setAttribute("aria-expanded", String(!minimized && !tucked));
+        }
+        if (animate) {
+            animateCompactPanel(panelBox, wrapper, tab, tucked);
+            tab.hidden = !tucked;
+        }
+        if (tucked && !animate && panelBox.contains(document.activeElement)) {
+            tab.focus({
+                preventScroll: true
+            });
+
+        }
+        if (!tucked && !animate && document.activeElement === tab && button) {
+            button.focus({
+                preventScroll: true
+            });
         }
     }
 
@@ -1816,9 +2127,9 @@
                     min-height: 0 !important;
                     overflow: hidden !important;
                     opacity: 0 !important;
-                    pointer-events: none !important;
                     clip: rect(0, 0, 0, 0) !important;
                     clip-path: inset(50%) !important;
+                    pointer-events: none !important;
                 }
             `;
             document.head.appendChild(style);
@@ -2736,7 +3047,7 @@
             return;
         }
         if (key === STORAGE_KEY_PANEL_MINIMIZED) {
-            setPanelMinimized(newValue === "true");
+            applyPanelLayout();
         }
     });
 
